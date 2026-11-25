@@ -6,6 +6,8 @@ using NexaHR.Application.Interfaces.Dashboard;
 using NexaHR.Infrastructure.Services.Dashboard;
 using NexaHR.Application.Interfaces.Notifications;
 using NexaHR.Infrastructure.Services.Notifications;
+using NexaHR.Application.Interfaces.Vacancies;
+using NexaHR.Infrastructure.Services.Vacancies;
 using NexaHR.Application.Interfaces.Departments;
 using NexaHR.Infrastructure.Services.Departments;
 using NexaHR.Infrastructure.Services.Company;
@@ -78,6 +80,9 @@ builder.Services.AddDataProtection();
 builder.Services.AddScoped<JwtTokenService>();
 
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+
+builder.Services.AddScoped<IVacancyService, VacancyService>();
+
 
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
