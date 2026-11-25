@@ -18,6 +18,10 @@ public class NexaHRDbContext
     public DbSet<AuthSession> AuthSessions =>
         Set<AuthSession>();
 
+    public DbSet<ConsumedRefreshToken> ConsumedRefreshTokens =>
+        Set<ConsumedRefreshToken>();
+
+
 
     public DbSet<AuthEmailOutbox> AuthEmailOutbox =>
         Set<AuthEmailOutbox>();
@@ -28,9 +32,449 @@ public class NexaHRDbContext
     public DbSet<CompanySettings> CompanySettings =>
         Set<CompanySettings>();
 
+    public DbSet<Department> Departments =>
+        Set<Department>();
+
+    public DbSet<Notification> Notifications =>
+        Set<Notification>();
+
+    public DbSet<AuditEvent> AuditEvents =>
+        Set<AuditEvent>();
+
+    public DbSet<ProcessingPolicy> ProcessingPolicies =>
+        Set<ProcessingPolicy>();
+
+    public DbSet<LegalHold> LegalHolds =>
+        Set<LegalHold>();
+
+    public DbSet<LegalHoldEvent> LegalHoldEvents =>
+        Set<LegalHoldEvent>();
+
+    public DbSet<RetentionRun> RetentionRuns =>
+        Set<RetentionRun>();
+
+    private void EnsureAuditAppendOnly()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidChanges = ChangeTracker
+            .Entries<AuditEvent>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        var invalidPrivacyHistoryChanges =
+            ChangeTracker.Entries<ProcessingPolicy>()
+                .Any(entry =>
+                    entry.State == EntityState.Modified ||
+                    entry.State == EntityState.Deleted)
+            ||
+            ChangeTracker.Entries<LegalHoldEvent>()
+                .Any(entry =>
+                    entry.State == EntityState.Modified ||
+                    entry.State == EntityState.Deleted)
+            ||
+            ChangeTracker.Entries<LegalHold>()
+                .Any(entry =>
+                    entry.State == EntityState.Deleted);
+
+        if (invalidPrivacyHistoryChanges)
+        {
+            throw new InvalidOperationException(
+                "Privacy policy and legal hold history must be preserved.");
+        }
+
+        if (invalidChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing audit events cannot be modified or deleted.");
+        }
+    }
+
+    public override int SaveChanges(
+        bool acceptAllChangesOnSuccess)
+    {
+        EnsureAuditAppendOnly();
+
+        return base.SaveChanges(
+            acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAuditAppendOnly();
+
+        return base.SaveChangesAsync(
+            acceptAllChangesOnSuccess,
+            cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<ProcessingPolicy>(entity =>
+        {
+            entity.ToTable("ProcessingPolicies", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_ProcessingPolicy_Version",
+                    "[Version] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_ProcessingPolicy_RetentionDays",
+                    "[CandidateRetentionDays] > 0 AND " +
+                    "[EmploymentRetentionDays] > 0 AND " +
+                    "[AuditRetentionDays] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_ProcessingPolicy_Actions",
+                    "[CandidateRetentionAction] IN ('Delete','Anonymise') AND " +
+                    "[EmploymentRetentionAction] IN ('Delete','Anonymise') AND " +
+                    "[AuditRetentionAction] IN ('Delete','Anonymise')");
+            });
+
+            entity.HasKey(p => p.Id);
+
+            entity.HasIndex(p => p.Version)
+                .IsUnique();
+
+            entity.Property(p => p.CandidateRetentionAction)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(p => p.EmploymentRetentionAction)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(p => p.AuditRetentionAction)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(p => p.ProcessingPurpose)
+                .HasMaxLength(2000).IsRequired();
+
+            entity.Property(p => p.DataCategories)
+                .HasMaxLength(2000).IsRequired();
+
+            entity.Property(p => p.ProviderName)
+                .HasMaxLength(200).IsRequired();
+
+            entity.Property(p => p.ProviderRetention)
+                .HasMaxLength(1000).IsRequired();
+
+            entity.Property(p => p.ProviderAccessPolicy)
+                .HasMaxLength(2000).IsRequired();
+
+            entity.Property(p => p.ProcessingLocation)
+                .HasMaxLength(500).IsRequired();
+
+            entity.Property(p => p.LegalHoldPolicy)
+                .HasMaxLength(2000).IsRequired();
+
+            entity.Property(p => p.ApprovalReference)
+                .HasMaxLength(500).IsRequired();
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(p => p.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(p => p.RecordedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<LegalHold>(entity =>
+        {
+            entity.ToTable("LegalHolds");
+
+            entity.HasKey(h => h.Id);
+
+            entity.HasIndex(h => h.SubjectId)
+                .IsUnique();
+
+            entity.HasIndex(h => h.IsActive);
+
+            entity.Property(h => h.Scope)
+                .HasMaxLength(100).IsRequired();
+
+            entity.Property(h => h.Reason)
+                .HasMaxLength(1000).IsRequired();
+
+            entity.Property(h => h.RowVersion)
+                .IsRowVersion();
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(h => h.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(h => h.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(h => h.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(h => h.ReleasedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<LegalHoldEvent>(entity =>
+        {
+            entity.ToTable("LegalHoldEvents");
+
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => new
+            {
+                e.SubjectId,
+                e.CreatedAtUtc
+            });
+
+            entity.Property(e => e.Action)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(e => e.Scope)
+                .HasMaxLength(100).IsRequired();
+
+            entity.Property(e => e.Reason)
+                .HasMaxLength(1000).IsRequired();
+
+            entity.HasOne<LegalHold>()
+                .WithMany()
+                .HasForeignKey(e => e.LegalHoldId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(e => e.ActorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetentionRun>(entity =>
+        {
+            entity.ToTable("RetentionRuns", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_RetentionRun_MaxRecords",
+                    "[MaxRecords] > 0 AND [MaxRecords] <= 1000");
+
+                table.HasCheckConstraint(
+                    "CK_RetentionRun_Counts",
+                    "[EligibleCount] >= 0 AND " +
+                    "[ProcessedCount] >= 0 AND " +
+                    "[HeldCount] >= 0 AND " +
+                    "[FailedCount] >= 0 AND " +
+                    "[ProcessedCount] <= [MaxRecords]");
+
+                table.HasCheckConstraint(
+                    "CK_RetentionRun_Action",
+                    "[Action] IN ('Delete','Anonymise')");
+
+                table.HasCheckConstraint(
+                    "CK_RetentionRun_Status",
+                    "[Status] IN ('Pending','Running'," +
+                    "'Completed','Failed','Blocked')");
+            });
+
+            entity.HasKey(r => r.Id);
+
+            entity.HasIndex(r => new
+            {
+                r.Status,
+                r.CreatedAtUtc
+            });
+
+            entity.Property(r => r.DataCategory)
+                .HasMaxLength(100).IsRequired();
+
+            entity.Property(r => r.Action)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(r => r.AuthorizationReason)
+                .HasMaxLength(1000).IsRequired();
+
+            entity.Property(r => r.Status)
+                .HasMaxLength(30).IsRequired();
+
+            entity.Property(r => r.ResultCode)
+                .HasMaxLength(100);
+
+            entity.Property(r => r.RowVersion)
+                .IsRowVersion();
+
+            entity.HasOne<ProcessingPolicy>()
+                .WithMany()
+                .HasForeignKey(r => r.ProcessingPolicyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(r => r.AuthorizedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+
+        builder.Entity<AuditEvent>(entity =>
+        {
+            entity.ToTable("AuditEvents");
+
+            entity.HasKey(a => a.Id);
+
+            entity.Property(a => a.ActorRole)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(a => a.Module)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(a => a.Action)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(a => a.EntityType)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(a => a.Outcome)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(a => a.ReasonCode)
+                .HasMaxLength(100);
+
+            entity.Property(a => a.CreatedAtUtc)
+                .IsRequired();
+
+            entity.HasIndex(a => a.CreatedAtUtc);
+
+            entity.HasIndex(a => new
+            {
+                a.Module,
+                a.CreatedAtUtc
+            });
+
+            entity.HasIndex(a => new
+            {
+                a.ActorUserId,
+                a.CreatedAtUtc
+            });
+
+            entity.HasIndex(a => new
+            {
+                a.EntityType,
+                a.EntityId
+            });
+
+            entity.HasIndex(a => a.CorrelationId);
+
+            entity.HasIndex(a => new
+            {
+                a.IsHrVisible,
+                a.CreatedAtUtc
+            });
+
+            entity.HasIndex(a => new
+            {
+                a.IsCeoVisible,
+                a.CreatedAtUtc
+            });
+        });
+
+
+        builder.Entity<Notification>(entity =>
+        {
+            entity.ToTable("Notifications");
+
+            entity.HasKey(n => n.Id);
+
+            entity.Property(n => n.Type)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(n => n.Title)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(n => n.Message)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(n => n.TargetType)
+                .HasMaxLength(50);
+
+            entity.Property(n => n.CreatedAtUtc)
+                .IsRequired();
+
+            entity.HasIndex(n => new
+            {
+                n.RecipientUserId,
+                n.IsRead,
+                n.CreatedAtUtc
+            });
+
+            entity.HasIndex(n => new
+            {
+                n.RecipientUserId,
+                n.CreatedAtUtc
+            });
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(n => n.RecipientUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+
+        builder.Entity<Department>(entity =>
+        {
+            entity.ToTable("Departments");
+
+            entity.HasKey(d => d.Id);
+
+            entity.Property(d => d.Name)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(d => d.NormalizedName)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.HasIndex(d => d.NormalizedName)
+                .IsUnique();
+
+            entity.Property(d => d.Description)
+                .HasMaxLength(500);
+
+            entity.HasIndex(d => d.IsArchived);
+
+            entity.Property(d => d.RowVersion)
+                .IsRowVersion();
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.ArchivedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
 
         builder.Entity<CompanySettings>(entity =>
         {
@@ -160,8 +604,43 @@ public class NexaHRDbContext
             entity.Property(user => user.CreatedAtUtc)
                 .IsRequired();
 
+            entity.Property(user =>
+                    user.HasPrivacyGovernanceAccess)
+                .HasDefaultValue(false)
+                .IsRequired();
+
+            entity.HasIndex(user => user.NormalizedEmail)
+                .HasDatabaseName("EmailIndex")
+                .IsUnique()
+                .HasFilter("[NormalizedEmail] IS NOT NULL");
+
             entity.HasIndex(user => user.IsActive);
         });
+
+        builder.Entity<ConsumedRefreshToken>(entity =>
+        {
+            entity.ToTable("ConsumedRefreshTokens");
+
+            entity.HasKey(token => token.Id);
+
+            entity.Property(token => token.TokenHash)
+                .HasMaxLength(64)
+                .IsRequired();
+
+            entity.HasIndex(token => token.TokenHash)
+                .IsUnique();
+
+            entity.HasIndex(token => token.AuthSessionId);
+
+            entity.Property(token => token.ConsumedAtUtc)
+                .IsRequired();
+
+            entity.HasOne<AuthSession>()
+                .WithMany()
+                .HasForeignKey(token => token.AuthSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
 
         builder.Entity<AuthSession>(entity =>
         {

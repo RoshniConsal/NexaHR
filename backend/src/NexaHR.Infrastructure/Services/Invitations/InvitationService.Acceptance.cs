@@ -1,3 +1,4 @@
+using NexaHR.Application.DTOs.Audit;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using NexaHR.Application.DTOs.Invitations;
@@ -212,6 +213,17 @@ public sealed partial class InvitationService
 
         invitation.AcceptedAtUtc = DateTime.UtcNow;
         invitation.AcceptedByUserId = user.Id;
+
+        _audit.StageEvent(new AuditWriteRequest
+        {
+            ActorUserId = user.Id,
+            ActorRole = invitation.Role,
+            Module = "Invitations",
+            Action = "InvitationAccepted",
+            EntityType = "AccountInvitation",
+            EntityId = invitation.Id,
+            Outcome = "success"
+        });
 
         await _db.SaveChangesAsync();
 

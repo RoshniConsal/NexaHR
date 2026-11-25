@@ -38,6 +38,7 @@ public static class AuthenticationExtensions
         .AddEntityFrameworkStores<NexaHRDbContext>()
         .AddSignInManager()
         .AddDefaultTokenProviders();
+        services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = TimeSpan.FromHours(1));
 
         // JWT configuration
         var jwtKey = configuration["Jwt:Key"]
@@ -146,6 +147,7 @@ public static class AuthenticationExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
 
                     ValidIssuer = jwtIssuer,
                     ValidAudience = jwtAudience,

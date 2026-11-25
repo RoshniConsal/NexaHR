@@ -1,3 +1,5 @@
+using NexaHR.Application.DTOs.Audit;
+using NexaHR.Application.Interfaces.Audit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NexaHR.Application.DTOs.Accounts;
@@ -13,13 +15,16 @@ public sealed class AccountService : IAccountService
 {
     private readonly NexaHRDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditWriter _audit;
 
     public AccountService(
         NexaHRDbContext db,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IAuditWriter audit)
     {
         _db = db;
         _userManager = userManager;
+        _audit = audit;
     }
 
     private async Task<ApplicationUser?> GetActorAsync(
@@ -244,6 +249,22 @@ public sealed class AccountService : IAccountService
 
         var account = await ManagedAccounts(actor)
             .SingleAsync(a => a.AccountId == accountId);
+
+        _audit.StageEvent(new AuditWriteRequest
+        {
+            ActorUserId = actorId,
+            ActorRole = AppRoles.HRManager,
+            Module = "Accounts",
+            Action = "AccountStatusChanged",
+            EntityType = "Account",
+            EntityId = accountId,
+            Outcome = "success",
+            ReasonCode = activate
+                ? "AccountActivated"
+                : "AccountDeactivated"
+        });
+
+        await _db.SaveChangesAsync();
 
         await transaction.CommitAsync();
 
