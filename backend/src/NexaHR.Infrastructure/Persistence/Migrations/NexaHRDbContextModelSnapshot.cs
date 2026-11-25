@@ -862,6 +862,257 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.Vacancy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ClosedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ClosureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("PublishedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PublishedRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClosedByUserId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("PublishedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Id", "PublishedRevisionId");
+
+                    b.ToTable("Vacancies", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Vacancy_ClosureMetadata", "([Status] = 'Closed' AND [ClosedAtUtc] IS NOT NULL AND [ClosedByUserId] IS NOT NULL AND [ClosureReason] IS NOT NULL AND LEN(LTRIM(RTRIM([ClosureReason]))) > 0) OR ([Status] <> 'Closed' AND [ClosedAtUtc] IS NULL AND [ClosedByUserId] IS NULL AND [ClosureReason] IS NULL)");
+
+                            t.HasCheckConstraint("CK_Vacancy_PublicationMetadata", "([PublishedRevisionId] IS NULL AND [PublishedAtUtc] IS NULL AND [PublishedByUserId] IS NULL) OR ([PublishedRevisionId] IS NOT NULL AND [PublishedAtUtc] IS NOT NULL AND [PublishedByUserId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Vacancy_PublishedStatus", "[Status] <> 'Published' OR [PublishedRevisionId] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_Vacancy_Status", "[Status] IN ('Draft','PendingApproval','Approved','Rejected','Published','Paused','Closed')");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VacancyRevisionId", "Kind", "Label")
+                        .IsUnique();
+
+                    b.ToTable("VacancyCriteria", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_VacancyCriterion_Kind", "[Kind] IN ('RequiredSkill','PreferredSkill','InterviewCriterion','ReviewFlag')");
+
+                            t.HasCheckConstraint("CK_VacancyCriterion_Weight", "[Weight] >= 0 AND ([Kind] <> 'RequiredSkill' OR [Weight] = 2) AND ([Kind] <> 'PreferredSkill' OR [Weight] = 1)");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ApproverRole")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("ApproverUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApproverUserId");
+
+                    b.HasIndex("VacancyRevisionId")
+                        .IsUnique();
+
+                    b.ToTable("VacancyDecisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_VacancyDecision_ApproverRole", "[ApproverRole] = 'CEO'");
+
+                            t.HasCheckConstraint("CK_VacancyDecision_Decision", "[Decision] IN ('Approved','Rejected')");
+
+                            t.HasCheckConstraint("CK_VacancyDecision_RejectionComment", "[Decision] <> 'Rejected' OR ([Comment] IS NOT NULL AND LEN(LTRIM(RTRIM([Comment]))) > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("ClosingDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("HiringReason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("MinimumExperienceYears")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("Openings")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("VacancyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WorkMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("VacancyId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("VacancyRevisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_VacancyRevision_Experience", "[MinimumExperienceYears] IS NULL OR [MinimumExperienceYears] >= 0");
+
+                            t.HasCheckConstraint("CK_VacancyRevision_Openings", "[Openings] > 0");
+
+                            t.HasCheckConstraint("CK_VacancyRevision_Revision", "[Revision] > 0");
+
+                            t.HasCheckConstraint("CK_VacancyRevision_Submission", "([SubmittedAtUtc] IS NULL AND [SubmittedByUserId] IS NULL) OR ([SubmittedAtUtc] IS NOT NULL AND [SubmittedByUserId] IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("NexaHR.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1152,6 +1403,87 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.HasOne("NexaHR.Domain.Entities.ProcessingPolicy", null)
                         .WithMany()
                         .HasForeignKey("ProcessingPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.Vacancy", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("Id", "PublishedRevisionId")
+                        .HasPrincipalKey("VacancyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyCriterion", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyDecision", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ApproverUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithOne()
+                        .HasForeignKey("NexaHR.Domain.Entities.VacancyDecision", "VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.VacancyRevision", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NexaHR.Domain.Entities.Vacancy", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

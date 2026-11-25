@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using NexaHR.Domain.Entities;
 using NexaHR.Infrastructure.Identity;
+using NexaHR.Infrastructure.Persistence.Configurations.Vacancies;
 
 namespace NexaHR.Infrastructure.Persistence;
 
@@ -53,6 +54,18 @@ public class NexaHRDbContext
     public DbSet<RetentionRun> RetentionRuns =>
         Set<RetentionRun>();
 
+    public DbSet<Vacancy> Vacancies =>
+        Set<Vacancy>();
+
+    public DbSet<VacancyRevision> VacancyRevisions =>
+        Set<VacancyRevision>();
+
+    public DbSet<VacancyCriterion> VacancyCriteria =>
+        Set<VacancyCriterion>();
+
+    public DbSet<VacancyDecision> VacancyDecisions =>
+        Set<VacancyDecision>();
+
     private void EnsureAuditAppendOnly()
     {
         ChangeTracker.DetectChanges();
@@ -91,10 +104,88 @@ public class NexaHRDbContext
         }
     }
 
+    private void EnsureVacancyHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidDecisionChanges = ChangeTracker
+            .Entries<VacancyDecision>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidDecisionChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing vacancy decisions cannot be modified or deleted.");
+        }
+
+        var invalidRevisionChanges = ChangeTracker
+            .Entries<VacancyRevision>()
+            .Any(entry =>
+                (entry.State == EntityState.Modified ||
+                 entry.State == EntityState.Deleted) &&
+                entry.Property(r => r.SubmittedAtUtc)
+                    .OriginalValue.HasValue);
+
+        if (invalidRevisionChanges)
+        {
+            throw new InvalidOperationException(
+                "Submitted vacancy revisions cannot be modified or deleted.");
+        }
+
+        var changedCriteria = ChangeTracker
+            .Entries<VacancyCriterion>()
+            .Where(entry =>
+                entry.State == EntityState.Added ||
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted)
+            .ToList();
+
+        var affectedRevisionIds = changedCriteria
+            .Select(entry => entry.Entity.VacancyRevisionId)
+            .Concat(changedCriteria
+                .Where(entry => entry.State != EntityState.Added)
+                .Select(entry => entry
+                    .Property(c => c.VacancyRevisionId)
+                    .OriginalValue))
+            .Distinct()
+            .ToList();
+
+        if (affectedRevisionIds.Count > 0)
+        {
+            var submittedTrackedRevision = ChangeTracker
+                .Entries<VacancyRevision>()
+                .Any(entry =>
+                    affectedRevisionIds.Contains(entry.Entity.Id) &&
+                    (entry.Entity.SubmittedAtUtc.HasValue ||
+                     (entry.State != EntityState.Added &&
+                      entry.Property(r => r.SubmittedAtUtc)
+                          .OriginalValue.HasValue)));
+
+            var submittedStoredRevision = VacancyRevisions
+                .AsNoTracking()
+                .Any(revision =>
+                    affectedRevisionIds.Contains(revision.Id) &&
+                    revision.SubmittedAtUtc != null);
+
+            var invalidCriterionChanges =
+                submittedTrackedRevision ||
+                submittedStoredRevision;
+
+            if (invalidCriterionChanges)
+            {
+                throw new InvalidOperationException(
+                    "Criteria of submitted vacancy revisions cannot be changed.");
+            }
+        }
+    }
+
     public override int SaveChanges(
         bool acceptAllChangesOnSuccess)
     {
         EnsureAuditAppendOnly();
+        EnsureVacancyHistoryImmutable();
 
         return base.SaveChanges(
             acceptAllChangesOnSuccess);
@@ -105,6 +196,7 @@ public class NexaHRDbContext
         CancellationToken cancellationToken = default)
     {
         EnsureAuditAppendOnly();
+        EnsureVacancyHistoryImmutable();
 
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
@@ -114,6 +206,12 @@ public class NexaHRDbContext
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.ApplyConfiguration(new VacancyConfiguration());
+        builder.ApplyConfiguration(new VacancyRevisionConfiguration());
+        builder.ApplyConfiguration(new VacancyCriterionConfiguration());
+        builder.ApplyConfiguration(new VacancyDecisionConfiguration());
+
 
         builder.Entity<ProcessingPolicy>(entity =>
         {
