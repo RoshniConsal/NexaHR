@@ -1,3 +1,13 @@
+using NexaHR.Application.Interfaces.Audit;
+using NexaHR.Application.Interfaces.Privacy;
+using NexaHR.Infrastructure.Services.Audit;
+using NexaHR.Infrastructure.Services.Privacy;
+using NexaHR.Application.Interfaces.Dashboard;
+using NexaHR.Infrastructure.Services.Dashboard;
+using NexaHR.Application.Interfaces.Notifications;
+using NexaHR.Infrastructure.Services.Notifications;
+using NexaHR.Application.Interfaces.Departments;
+using NexaHR.Infrastructure.Services.Departments;
 using NexaHR.Infrastructure.Services.Company;
 using NexaHR.Application.Interfaces.Company;
 using NexaHR.Infrastructure.Services.Invitations;
@@ -67,6 +77,16 @@ builder.Services.AddDataProtection();
 
 builder.Services.AddScoped<JwtTokenService>();
 
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IAuditWriter, AuditWriter>();
+builder.Services.AddScoped<IPrivacyService, PrivacyService>();
+
 var app = builder.Build();
 
 // Initialize configured application roles
@@ -88,6 +108,16 @@ if (app.Configuration.GetValue<bool>(
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint(
+            "/openapi/v1.json",
+            "NexaHR API v1");
+
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "NexaHR API Documentation";
+    });
 }
 
 // Configure middleware

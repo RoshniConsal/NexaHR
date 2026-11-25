@@ -41,8 +41,18 @@ public sealed class AuthService : IAuthService
     {
         var email = request.Email.Trim();
 
-        var existingUser =
-            await _userManager.FindByEmailAsync(email);
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync();
+
+        var normalizedEmail =
+            _userManager.NormalizeEmail(email);
+
+        var existingUser = await _dbContext.Users
+            .FromSqlInterpolated($@"
+                SELECT * FROM [AspNetUsers]
+                WITH (UPDLOCK, HOLDLOCK)
+                WHERE [NormalizedEmail] = {normalizedEmail}")
+            .SingleOrDefaultAsync();
 
         if (existingUser is not null)
         {
@@ -60,8 +70,7 @@ public sealed class AuthService : IAuthService
                 "Candidate role has not been configured.");
         }
 
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync();
+
 
         var user = new ApplicationUser
         {
@@ -76,9 +85,25 @@ public sealed class AuthService : IAuthService
             LockoutEnabled = true
         };
 
-        var createResult =
-            await _userManager.CreateAsync(
+        IdentityResult createResult;
+
+        try
+        {
+            createResult = await _userManager.CreateAsync(
                 user, request.Password);
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is Microsoft.Data.SqlClient.SqlException sql &&
+            (sql.Number == 2601 || sql.Number == 2627))
+        {
+            await transaction.RollbackAsync();
+
+            return new RegisterResponse
+            {
+                Success = false,
+                Message = "Registration could not be completed."
+            };
+        }
 
         if (!createResult.Succeeded)
         {
@@ -132,8 +157,18 @@ public sealed class AuthService : IAuthService
     public async Task<LoginResponse> LoginAsync(
         LoginRequest request)
     {
-        var user = await _userManager.FindByEmailAsync(
-            request.Email.Trim());
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync();
+
+        var normalizedEmail =
+            _userManager.NormalizeEmail(request.Email.Trim());
+
+        var user = await _dbContext.Users
+            .FromSqlInterpolated($@"
+                SELECT * FROM [AspNetUsers]
+                WITH (UPDLOCK, HOLDLOCK)
+                WHERE [NormalizedEmail] = {normalizedEmail}")
+            .SingleOrDefaultAsync();
 
         if (user is null || !user.IsActive)
         {
@@ -152,6 +187,8 @@ public sealed class AuthService : IAuthService
 
         if (!result.Succeeded)
         {
+            await transaction.CommitAsync();
+
             return new LoginResponse
             {
                 Success = false,
@@ -200,6 +237,8 @@ public sealed class AuthService : IAuthService
         _dbContext.AuthSessions.Add(session);
 
         await _dbContext.SaveChangesAsync();
+
+        await transaction.CommitAsync();
 
         return new LoginResponse
         {
@@ -253,6 +292,8 @@ public sealed class AuthService : IAuthService
 
         if (session is null)
         {
+            await RevokeReusedRefreshTokenAsync(tokenHash);
+
             return new LoginResponse
             {
                 Success = false,
@@ -298,6 +339,9 @@ public sealed class AuthService : IAuthService
             _jwtTokenService.GenerateAccessToken(
                 user, roles, session.Id);
 
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync();
+
         var affected = await _dbContext.AuthSessions
             .Where(s =>
                 s.Id == session.Id &&
@@ -314,12 +358,27 @@ public sealed class AuthService : IAuthService
 
         if (affected != 1)
         {
+            await transaction.RollbackAsync();
+            await transaction.DisposeAsync();
+            await RevokeReusedRefreshTokenAsync(tokenHash);
+
             return new LoginResponse
             {
                 Success = false,
                 Message = "Session is no longer valid."
             };
         }
+
+        _dbContext.ConsumedRefreshTokens.Add(
+            new ConsumedRefreshToken
+            {
+                AuthSessionId = session.Id,
+                TokenHash = tokenHash,
+                ConsumedAtUtc = now
+            });
+
+        await _dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         return new LoginResponse
         {
@@ -336,6 +395,25 @@ public sealed class AuthService : IAuthService
     }
 
 
+
+    private async Task RevokeReusedRefreshTokenAsync(
+        string tokenHash)
+    {
+        var now = DateTime.UtcNow;
+
+        await _dbContext.AuthSessions
+            .Where(session =>
+                session.RevokedAtUtc == null &&
+                session.ExpiresAtUtc > now &&
+                _dbContext.ConsumedRefreshTokens.Any(token =>
+                    token.TokenHash == tokenHash &&
+                    token.AuthSessionId == session.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(
+                    session => session.RevokedAtUtc,
+                    (DateTime?)now));
+    }
+
     // API-005: Verify email
     public async Task<AuthOperationResponse> VerifyEmailAsync(
         VerifyEmailRequest request)
@@ -343,7 +421,7 @@ public sealed class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(
             request.Email.Trim());
 
-        if (user is null || !user.IsActive)
+        if (user is null || !user.IsActive || user.EmailConfirmed)
         {
             return new AuthOperationResponse
             {
@@ -422,8 +500,18 @@ public sealed class AuthService : IAuthService
     public async Task<AuthOperationResponse> ResetPasswordAsync(
         ResetPasswordRequest request)
     {
-        var user = await _userManager.FindByEmailAsync(
-            request.Email.Trim());
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync();
+
+        var normalizedEmail =
+            _userManager.NormalizeEmail(request.Email.Trim());
+
+        var user = await _dbContext.Users
+            .FromSqlInterpolated($@"
+                SELECT * FROM [AspNetUsers]
+                WITH (UPDLOCK, HOLDLOCK)
+                WHERE [NormalizedEmail] = {normalizedEmail}")
+            .SingleOrDefaultAsync();
 
         if (user is null ||
             !user.IsActive ||
@@ -436,8 +524,7 @@ public sealed class AuthService : IAuthService
             };
         }
 
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync();
+
 
         var result = await _userManager.ResetPasswordAsync(
             user,

@@ -1,3 +1,5 @@
+using NexaHR.Application.DTOs.Audit;
+using NexaHR.Application.Interfaces.Audit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
@@ -15,13 +17,16 @@ public sealed class CompanySettingsService
 {
     private readonly NexaHRDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
+    private readonly IAuditWriter _audit;
 
     public CompanySettingsService(
         NexaHRDbContext db,
-        UserManager<ApplicationUser> users)
+        UserManager<ApplicationUser> users,
+        IAuditWriter audit)
     {
         _db = db;
         _users = users;
+        _audit = audit;
     }
 
     private async Task<string?> GetRoleAsync(Guid userId)
@@ -201,6 +206,16 @@ public sealed class CompanySettingsService
         settings.UpdatedAtUtc = DateTime.UtcNow;
 
         settings.UpdatedByUserId = actorId;
+
+        _audit.StageEvent(new AuditWriteRequest
+        {
+            ActorUserId = actorId,
+            ActorRole = AppRoles.HRManager,
+            Module = "Company",
+            Action = "CompanySettingsUpdated",
+            EntityType = "CompanySettings",
+            Outcome = "success"
+        });
 
         try
         {

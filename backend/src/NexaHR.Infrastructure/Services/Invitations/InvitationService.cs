@@ -1,3 +1,5 @@
+using NexaHR.Application.DTOs.Audit;
+using NexaHR.Application.Interfaces.Audit;
 using System.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,15 +17,18 @@ public sealed partial class InvitationService
     private readonly NexaHRDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
     private readonly IAuthEmailService _email;
+    private readonly IAuditWriter _audit;
 
     public InvitationService(
         NexaHRDbContext db,
         UserManager<ApplicationUser> users,
-        IAuthEmailService email)
+        IAuthEmailService email,
+        IAuditWriter audit)
     {
         _db = db;
         _users = users;
         _email = email;
+        _audit = audit;
     }
 
     private async Task<ApplicationUser?> GetActorAsync(
@@ -267,10 +272,23 @@ public sealed partial class InvitationService
 
         _db.AccountInvitations.Add(invitation);
 
+        _audit.StageEvent(new AuditWriteRequest
+        {
+            ActorUserId = actorId,
+            ActorRole = AppRoles.HRManager,
+            Module = "Invitations",
+            Action = "InvitationIssued",
+            EntityType = "AccountInvitation",
+            EntityId = invitation.Id,
+            Outcome = "success"
+        });
+
         await _email.QueueInvitationEmailAsync(
             invitation.Email,
             token,
             invitation.ExpiresAtUtc);
+
+        await _db.SaveChangesAsync();
 
         await transaction.CommitAsync();
 
@@ -373,10 +391,23 @@ public sealed partial class InvitationService
 
         _db.AccountInvitations.Add(invitation);
 
+        _audit.StageEvent(new AuditWriteRequest
+        {
+            ActorUserId = actorId,
+            ActorRole = AppRoles.HRManager,
+            Module = "Invitations",
+            Action = "InvitationReissued",
+            EntityType = "AccountInvitation",
+            EntityId = invitation.Id,
+            Outcome = "success"
+        });
+
         await _email.QueueInvitationEmailAsync(
             invitation.Email,
             token,
             invitation.ExpiresAtUtc);
+
+        await _db.SaveChangesAsync();
 
         await transaction.CommitAsync();
 
@@ -429,6 +460,17 @@ public sealed partial class InvitationService
             invitation.RevokedByUserId = actorId;
             invitation.RevocationReason =
                 request.Reason.Trim();
+
+            _audit.StageEvent(new AuditWriteRequest
+            {
+                ActorUserId = actorId,
+                ActorRole = AppRoles.HRManager,
+                Module = "Invitations",
+                Action = "InvitationRevoked",
+                EntityType = "AccountInvitation",
+                EntityId = invitation.Id,
+                Outcome = "success"
+            });
 
             await _db.SaveChangesAsync();
         }

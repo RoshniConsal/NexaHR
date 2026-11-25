@@ -16,4 +16,6 @@ public class ApplicationUser : IdentityUser<Guid>
     public DateTime? DeactivatedAtUtc { get; set; }
 
     public bool HasPrivilegedAccess { get; set; } = false;
+
+    public bool HasPrivacyGovernanceAccess { get; set; } = false;
 }
