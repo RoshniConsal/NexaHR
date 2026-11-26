@@ -1,9 +1,20 @@
 using NexaHR.Application.DTOs.Vacancies;
+using NexaHR.Application.DTOs.Jobs;
 
 namespace NexaHR.Application.Interfaces.Vacancies;
 
 public interface IVacancyService
 {
+
+    Task<PublicJobListResponse> GetPublicJobsAsync(
+        PublicJobQuery request,
+        CancellationToken cancellationToken = default);
+
+    Task<PublicJobDetailsResponse?> GetPublicJobDetailsAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default);
+
+
     Task<VacancyListResponse?> GetVacanciesAsync(
         Guid actorUserId,
         VacancyQuery query,
@@ -40,5 +51,17 @@ public interface IVacancyService
         Guid actorUserId,
         Guid vacancyId,
         DecideVacancyRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<PublishVacancyOperationResponse> PublishAsync(
+        Guid actorUserId,
+        Guid vacancyId,
+        PublishVacancyRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<CloseVacancyOperationResponse> CloseAsync(
+        Guid actorUserId,
+        Guid vacancyId,
+        CloseVacancyRequest request,
         CancellationToken cancellationToken = default);
 }

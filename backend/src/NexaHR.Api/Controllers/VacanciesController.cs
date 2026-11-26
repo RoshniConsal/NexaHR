@@ -369,4 +369,98 @@ public sealed class VacanciesController : ControllerBase
             _ => BadRequest(result)
         };
     }
+
+    // API-070: Publish the exact CEO-approved vacancy revision
+    // Requirement: VAC-03
+    [HttpPost("{vacancyId:guid}/publications")]
+    [Authorize(Roles = AppRoles.HRManager)]
+    [ProducesResponseType(
+        typeof(PublishVacancyOperationResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> PublishVacancy(
+        Guid vacancyId,
+        [FromBody] PublishVacancyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActorId(out var actorUserId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await _service.PublishAsync(
+            actorUserId,
+            vacancyId,
+            request,
+            cancellationToken);
+
+        if (result.Success)
+        {
+            return Ok(result);
+        }
+
+        return result.Code switch
+        {
+            "forbidden" => Forbid(),
+
+            "not_found" => NotFound(result),
+
+            "invalid_state" or
+            "expired" or
+            "archived" or
+            "concurrency_conflict" => Conflict(result),
+
+            _ => BadRequest(result)
+        };
+    }
+
+    // API-071: Close a published vacancy
+    // Requirements: VAC-05, VAC-06
+    [HttpPost("{vacancyId:guid}/closures")]
+    [Authorize(Roles = AppRoles.HRManager)]
+    [ProducesResponseType(
+        typeof(CloseVacancyOperationResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CloseVacancy(
+        Guid vacancyId,
+        [FromBody] CloseVacancyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActorId(out var actorUserId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await _service.CloseAsync(
+            actorUserId,
+            vacancyId,
+            request,
+            cancellationToken);
+
+        if (result.Success)
+        {
+            return Ok(result);
+        }
+
+        return result.Code switch
+        {
+            "forbidden" => Forbid(),
+
+            "not_found" => NotFound(result),
+
+            "invalid_state" or
+            "concurrency_conflict" => Conflict(result),
+
+            _ => BadRequest(result)
+        };
+    }
 }
