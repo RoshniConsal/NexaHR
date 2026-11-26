@@ -448,6 +448,90 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.ToTable("ConsumedRefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ScanResultCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ScanStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("ScannedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Sha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerUserId", "CreatedAtUtc");
+
+                    b.HasIndex("OwnerUserId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("ScanStatus", "CreatedAtUtc");
+
+                    b.ToTable("CvDocuments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CvDocument_ContentType", "[ContentType] IN ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document')");
+
+                            t.HasCheckConstraint("CK_CvDocument_ScanMetadata", "([ScanStatus] = 'Pending' AND [ScannedAtUtc] IS NULL) OR ([ScanStatus] IN ('Clean','Infected','Failed') AND [ScannedAtUtc] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_CvDocument_ScanStatus", "[ScanStatus] IN ('Pending','Clean','Infected','Failed')");
+
+                            t.HasCheckConstraint("CK_CvDocument_Sha256Hash", "LEN([Sha256Hash]) = 64");
+
+                            t.HasCheckConstraint("CK_CvDocument_SizeBytes", "[SizeBytes] > 0 AND [SizeBytes] <= 5242880");
+
+                            t.HasCheckConstraint("CK_CvDocument_Version", "[Version] > 0");
+                        });
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1306,6 +1390,15 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AuthSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvDocument", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
