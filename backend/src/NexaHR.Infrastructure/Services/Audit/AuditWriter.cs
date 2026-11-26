@@ -151,10 +151,26 @@ public sealed class AuditWriter : IAuditWriter
 
                 (module == "Recruitment" &&
                  entityType == "Vacancy" &&
-                 action == "VacancyCreated" &&
                  role == AppRoles.HRManager &&
                  hasEntityId &&
-                 reasonCode is null)
+                 reasonCode is null &&
+                 action is
+                    ("VacancyCreated" or
+                     "VacancyUpdated" or
+                     "VacancyRevisionCreated" or
+                     "VacancyPublicationPaused" or
+                     "VacancySubmitted"))
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "Vacancy" &&
+                 role == AppRoles.CEO &&
+                 hasEntityId &&
+                 reasonCode is null &&
+                 action is
+                    ("VacancyApproved" or
+                     "VacancyRejected"))
 
                 ||
 
