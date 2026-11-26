@@ -150,6 +150,15 @@ public sealed class AuditWriter : IAuditWriter
                 ||
 
                 (module == "Recruitment" &&
+                 entityType == "CvDocument" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null &&
+                 action is ("CvDocumentUploaded" or "CvDocumentContentAccessGranted"))
+
+                ||
+
+                (module == "Recruitment" &&
                  entityType == "Vacancy" &&
                  role == AppRoles.HRManager &&
                  hasEntityId &&

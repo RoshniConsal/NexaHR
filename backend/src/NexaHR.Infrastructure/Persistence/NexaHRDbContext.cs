@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using NexaHR.Domain.Entities;
 using NexaHR.Infrastructure.Identity;
 using NexaHR.Infrastructure.Persistence.Configurations.Vacancies;
+using NexaHR.Infrastructure.Persistence.Configurations.CvDocuments;
 
 namespace NexaHR.Infrastructure.Persistence;
 
@@ -53,6 +54,9 @@ public class NexaHRDbContext
 
     public DbSet<RetentionRun> RetentionRuns =>
         Set<RetentionRun>();
+
+    public DbSet<CvDocument> CvDocuments =>
+        Set<CvDocument>();
 
     public DbSet<Vacancy> Vacancies =>
         Set<Vacancy>();
@@ -207,6 +211,7 @@ public class NexaHRDbContext
     {
         base.OnModelCreating(builder);
 
+        builder.ApplyConfiguration(new CvDocumentConfiguration());
         builder.ApplyConfiguration(new VacancyConfiguration());
         builder.ApplyConfiguration(new VacancyRevisionConfiguration());
         builder.ApplyConfiguration(new VacancyCriterionConfiguration());
