@@ -159,7 +159,9 @@ public sealed class AuditWriter : IAuditWriter
                      "VacancyUpdated" or
                      "VacancyRevisionCreated" or
                      "VacancyPublicationPaused" or
-                     "VacancySubmitted"))
+                     "VacancySubmitted" or
+                     "VacancyPublished" or
+                     "VacancyClosed"))
 
                 ||
 

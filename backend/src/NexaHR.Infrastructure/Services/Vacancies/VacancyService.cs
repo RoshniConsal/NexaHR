@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NexaHR.Application.DTOs.Audit;
 using NexaHR.Application.DTOs.Vacancies;
+using NexaHR.Application.DTOs.Jobs;
 using NexaHR.Application.Interfaces.Audit;
 using NexaHR.Application.Interfaces.Vacancies;
 using NexaHR.Domain.Constants;
@@ -104,6 +105,197 @@ public sealed class VacancyService : IVacancyService
                 roles.Contains(AppRoles.CEO));
     }
 
+    private sealed class PublicJobRecord
+    {
+        public Vacancy Vacancy { get; init; } = null!;
+
+        public VacancyRevision Revision { get; init; } = null!;
+
+        public Department Department { get; init; } = null!;
+    }
+
+    private IQueryable<PublicJobRecord> QueryPublicJobs()
+    {
+        var sriLankaTime = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById(
+                "Asia/Colombo"));
+
+        var today = DateOnly.FromDateTime(sriLankaTime);
+
+        return
+            from vacancy in _db.Vacancies.AsNoTracking()
+            join revision in _db.VacancyRevisions.AsNoTracking()
+                on vacancy.PublishedRevisionId equals (Guid?)revision.Id
+            join department in _db.Departments.AsNoTracking()
+                on revision.DepartmentId equals department.Id
+            where vacancy.Status == VacancyStatuses.Published
+                && revision.VacancyId == vacancy.Id
+                && vacancy.DepartmentId == revision.DepartmentId
+                && vacancy.PublishedAtUtc.HasValue
+                && vacancy.PublishedByUserId.HasValue
+                && revision.SubmittedAtUtc.HasValue
+                && revision.SubmittedByUserId.HasValue
+                && revision.ClosingDate >= today
+                && !department.IsArchived
+                && !_db.VacancyRevisions.Any(r =>
+                    r.VacancyId == vacancy.Id &&
+                    r.Revision > revision.Revision)
+                && _db.VacancyDecisions.Any(d =>
+                    d.VacancyRevisionId == revision.Id &&
+                    d.ApproverRole == AppRoles.CEO &&
+                    d.Decision == VacancyDecisionTypes.Approved)
+            select new PublicJobRecord
+            {
+                Vacancy = vacancy,
+                Revision = revision,
+                Department = department
+            };
+    }
+
+    // API-061: Public listing of published open jobs
+    public async Task<PublicJobListResponse> GetPublicJobsAsync(
+        PublicJobQuery request,
+        CancellationToken cancellationToken = default)
+    {
+        var query = QueryPublicJobs();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+
+            query = query.Where(x =>
+                x.Revision.Title.Contains(search) ||
+                x.Revision.Location.Contains(search) ||
+                x.Department.Name.Contains(search));
+        }
+
+        if (request.DepartmentId.HasValue)
+        {
+            var departmentId = request.DepartmentId.Value;
+
+            query = query.Where(x =>
+                x.Revision.DepartmentId == departmentId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.EmploymentType))
+        {
+            var employmentType = request.EmploymentType.Trim();
+
+            query = query.Where(x =>
+                x.Revision.EmploymentType == employmentType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.WorkMode))
+        {
+            var workMode = request.WorkMode.Trim();
+
+            query = query.Where(x =>
+                x.Revision.WorkMode == workMode);
+        }
+
+        var page = Math.Clamp(request.Page, 1, 100000);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+
+        var totalCount = await query.CountAsync(
+            cancellationToken);
+
+        var records = await query
+            .OrderByDescending(x => x.Vacancy.PublishedAtUtc)
+            .ThenBy(x => x.Vacancy.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PublicJobListResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+
+            Items = records.Select(x =>
+                new PublicJobListItemResponse
+                {
+                    JobId = x.Vacancy.Id,
+                    Title = x.Revision.Title,
+                    DepartmentName = x.Department.Name,
+                    EmploymentType = x.Revision.EmploymentType,
+                    Location = x.Revision.Location,
+                    WorkMode = x.Revision.WorkMode,
+                    Openings = x.Revision.Openings,
+                    ClosingDate = x.Revision.ClosingDate,
+                    PublishedAtUtc = AsUtc(
+                        x.Vacancy.PublishedAtUtc!.Value)
+                }).ToList()
+        };
+    }
+
+    // API-062: Sanitised published open job details
+    public async Task<PublicJobDetailsResponse?> GetPublicJobDetailsAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default)
+    {
+        if (jobId == Guid.Empty)
+            return null;
+
+        var record = await QueryPublicJobs()
+            .Where(x => x.Vacancy.Id == jobId)
+            .Select(x => new
+            {
+                JobId = x.Vacancy.Id,
+                Title = x.Revision.Title,
+                DepartmentName = x.Department.Name,
+                EmploymentType = x.Revision.EmploymentType,
+                Location = x.Revision.Location,
+                WorkMode = x.Revision.WorkMode,
+                Openings = x.Revision.Openings,
+                Description = x.Revision.Description,
+                MinimumExperienceYears =
+                    x.Revision.MinimumExperienceYears,
+                ClosingDate = x.Revision.ClosingDate,
+                PublishedAtUtc = x.Vacancy.PublishedAtUtc,
+
+                RequiredSkills = _db.VacancyCriteria
+                    .Where(c =>
+                        c.VacancyRevisionId == x.Revision.Id &&
+                        c.Kind == VacancyCriterionKinds.RequiredSkill)
+                    .OrderBy(c => c.Label)
+                    .Select(c => c.Label)
+                    .ToList(),
+
+                PreferredSkills = _db.VacancyCriteria
+                    .Where(c =>
+                        c.VacancyRevisionId == x.Revision.Id &&
+                        c.Kind == VacancyCriterionKinds.PreferredSkill)
+                    .OrderBy(c => c.Label)
+                    .Select(c => c.Label)
+                    .ToList()
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (record is null)
+            return null;
+
+        return new PublicJobDetailsResponse
+        {
+            JobId = record.JobId,
+            Title = record.Title,
+            DepartmentName = record.DepartmentName,
+            EmploymentType = record.EmploymentType,
+            Location = record.Location,
+            WorkMode = record.WorkMode,
+            Openings = record.Openings,
+            Description = record.Description,
+            MinimumExperienceYears =
+                record.MinimumExperienceYears,
+            ClosingDate = record.ClosingDate,
+            PublishedAtUtc = AsUtc(
+                record.PublishedAtUtc!.Value),
+            RequiredSkills = record.RequiredSkills,
+            PreferredSkills = record.PreferredSkills
+        };
+    }
+
     // API-063: List vacancies
     public async Task<VacancyListResponse?> GetVacanciesAsync(
         Guid actorUserId,
@@ -186,10 +378,10 @@ public sealed class VacancyService : IVacancyService
                     WorkMode = x.Revision.WorkMode,
                     Openings = x.Revision.Openings,
                     ClosingDate = x.Revision.ClosingDate,
-                    CreatedAtUtc = x.Vacancy.CreatedAtUtc,
-                    UpdatedAtUtc = x.Vacancy.UpdatedAtUtc,
-                    SubmittedAtUtc = x.Revision.SubmittedAtUtc,
-                    PublishedAtUtc = x.Vacancy.PublishedAtUtc,
+                    CreatedAtUtc = AsUtc(x.Vacancy.CreatedAtUtc),
+                    UpdatedAtUtc = AsUtc(x.Vacancy.UpdatedAtUtc),
+                    SubmittedAtUtc = AsUtc(x.Revision.SubmittedAtUtc),
+                    PublishedAtUtc = AsUtc(x.Vacancy.PublishedAtUtc),
                     RowVersion = Convert.ToBase64String(
                         x.Vacancy.RowVersion)
                 }).ToList()
@@ -523,7 +715,7 @@ public sealed class VacancyService : IVacancyService
                 ApproverRole = d.ApproverRole,
                 Decision = d.Decision,
                 Comment = d.Comment,
-                AtUtc = d.AtUtc
+                AtUtc = AsUtc(d.AtUtc)
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -563,22 +755,22 @@ public sealed class VacancyService : IVacancyService
             Criteria = criteria,
 
             CreatedByUserId = record.Vacancy.CreatedByUserId,
-            CreatedAtUtc = record.Vacancy.CreatedAtUtc,
-            UpdatedAtUtc = record.Vacancy.UpdatedAtUtc,
+            CreatedAtUtc = AsUtc(record.Vacancy.CreatedAtUtc),
+            UpdatedAtUtc = AsUtc(record.Vacancy.UpdatedAtUtc),
 
-            RevisionCreatedAtUtc = record.Revision.CreatedAtUtc,
+            RevisionCreatedAtUtc = AsUtc(record.Revision.CreatedAtUtc),
 
             SubmittedByUserId = record.Revision.SubmittedByUserId,
-            SubmittedAtUtc = record.Revision.SubmittedAtUtc,
+            SubmittedAtUtc = AsUtc(record.Revision.SubmittedAtUtc),
 
             Decision = decision,
 
             PublishedRevisionId = record.Vacancy.PublishedRevisionId,
             PublishedByUserId = record.Vacancy.PublishedByUserId,
-            PublishedAtUtc = record.Vacancy.PublishedAtUtc,
+            PublishedAtUtc = AsUtc(record.Vacancy.PublishedAtUtc),
 
             ClosedByUserId = record.Vacancy.ClosedByUserId,
-            ClosedAtUtc = record.Vacancy.ClosedAtUtc,
+            ClosedAtUtc = AsUtc(record.Vacancy.ClosedAtUtc),
             ClosureReason = record.Vacancy.ClosureReason,
 
             RowVersion = Convert.ToBase64String(
@@ -599,6 +791,18 @@ public sealed class VacancyService : IVacancyService
             Code = code,
             Message = message
         };
+    }
+
+    private static DateTime AsUtc(DateTime value)
+    {
+        return DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    }
+
+    private static DateTime? AsUtc(DateTime? value)
+    {
+        return value.HasValue
+            ? AsUtc(value.Value)
+            : null;
     }
 
     private static bool TryReadRowVersion(
@@ -1149,9 +1353,9 @@ public sealed class VacancyService : IVacancyService
                     .ToList(),
 
                 CreatedByUserId = revision.CreatedByUserId,
-                CreatedAtUtc = revision.CreatedAtUtc,
+                CreatedAtUtc = AsUtc(revision.CreatedAtUtc),
                 SubmittedByUserId = revision.SubmittedByUserId,
-                SubmittedAtUtc = revision.SubmittedAtUtc,
+                SubmittedAtUtc = AsUtc(revision.SubmittedAtUtc),
 
                 Decision = decision is null
                     ? null
@@ -1166,7 +1370,7 @@ public sealed class VacancyService : IVacancyService
                         ApproverRole = decision.ApproverRole,
                         Decision = decision.Decision,
                         Comment = decision.Comment,
-                        AtUtc = decision.AtUtc
+                        AtUtc = AsUtc(decision.AtUtc)
                     },
 
                 RowVersion = Convert.ToBase64String(
@@ -1675,7 +1879,7 @@ public sealed class VacancyService : IVacancyService
                         ApproverRole = decision.ApproverRole,
                         Decision = decision.Decision,
                         Comment = decision.Comment,
-                        AtUtc = decision.AtUtc
+                        AtUtc = AsUtc(decision.AtUtc)
                     },
 
                     RowVersion = Convert.ToBase64String(
@@ -1714,6 +1918,480 @@ public sealed class VacancyService : IVacancyService
             return DecideFail(
                 "concurrency_conflict",
                 "Concurrent vacancy decision. Reload and retry.");
+        }
+    }
+
+    private static PublishVacancyOperationResponse PublishFail(
+        string code,
+        string message)
+    {
+        return new PublishVacancyOperationResponse
+        {
+            Success = false,
+            Code = code,
+            Message = message
+        };
+    }
+
+    // API-070: Publish the exact CEO-approved vacancy revision
+    public async Task<PublishVacancyOperationResponse> PublishAsync(
+        Guid actorUserId,
+        Guid vacancyId,
+        PublishVacancyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await IsHrAsync(actorUserId))
+        {
+            return PublishFail(
+                "forbidden",
+                "Access denied.");
+        }
+
+        if (request is null ||
+            vacancyId == Guid.Empty ||
+            request.VacancyRevisionId == Guid.Empty)
+        {
+            return PublishFail(
+                "validation_error",
+                "Vacancy and revision IDs are required.");
+        }
+
+        if (!TryReadRowVersion(
+                request.RowVersion,
+                out var vacancyRowVersion) ||
+            !TryReadRowVersion(
+                request.RevisionRowVersion,
+                out var revisionRowVersion))
+        {
+            return PublishFail(
+                "validation_error",
+                "Valid row versions are required.");
+        }
+
+        try
+        {
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.Serializable,
+                    cancellationToken);
+
+            var vacancy = await _db.Vacancies
+                .FirstOrDefaultAsync(
+                    v => v.Id == vacancyId,
+                    cancellationToken);
+
+            if (vacancy is null)
+            {
+                return PublishFail(
+                    "not_found",
+                    "Vacancy not found.");
+            }
+
+            var currentRevision = await _db.VacancyRevisions
+                .AsNoTracking()
+                .Where(r => r.VacancyId == vacancyId)
+                .OrderByDescending(r => r.Revision)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (currentRevision is null)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "Vacancy revision is missing.");
+            }
+
+            if (currentRevision.Id != request.VacancyRevisionId ||
+                !vacancy.RowVersion.SequenceEqual(
+                    vacancyRowVersion) ||
+                !currentRevision.RowVersion.SequenceEqual(
+                    revisionRowVersion))
+            {
+                return PublishFail(
+                    "concurrency_conflict",
+                    "Vacancy data changed. Reload and retry.");
+            }
+
+            if (vacancy.Status != VacancyStatuses.Approved)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "Only approved vacancies can be published.");
+            }
+
+            if (!currentRevision.SubmittedAtUtc.HasValue ||
+                !currentRevision.SubmittedByUserId.HasValue ||
+                currentRevision.SubmittedByUserId == Guid.Empty)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "The current revision has not been submitted.");
+            }
+
+            if (vacancy.DepartmentId != currentRevision.DepartmentId)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "Vacancy department is inconsistent.");
+            }
+
+            var decision = await _db.VacancyDecisions
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    d => d.VacancyRevisionId == currentRevision.Id,
+                    cancellationToken);
+
+            if (decision is null ||
+                decision.Decision != VacancyDecisionTypes.Approved ||
+                decision.ApproverRole != AppRoles.CEO)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "The current revision requires CEO approval.");
+            }
+
+            var now = DateTime.UtcNow;
+
+            var sriLankaTime =
+                TimeZoneInfo.ConvertTimeFromUtc(
+                    now,
+                    TimeZoneInfo.FindSystemTimeZoneById(
+                        "Asia/Colombo"));
+
+            var today = DateOnly.FromDateTime(sriLankaTime);
+
+            if (currentRevision.ClosingDate < today)
+            {
+                return PublishFail(
+                    "expired",
+                    "Vacancy closing date has expired.");
+            }
+
+            var department = await _db.Departments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    d => d.Id == currentRevision.DepartmentId,
+                    cancellationToken);
+
+            if (department is null)
+            {
+                return PublishFail(
+                    "not_found",
+                    "Department not found.");
+            }
+
+            if (department.IsArchived)
+            {
+                return PublishFail(
+                    "archived",
+                    "Vacancies in archived departments cannot be published.");
+            }
+
+            var isRepublication =
+                vacancy.PublishedRevisionId.HasValue;
+
+            if (vacancy.PublishedRevisionId == currentRevision.Id)
+            {
+                return PublishFail(
+                    "invalid_state",
+                    "This revision has already been published.");
+            }
+
+            vacancy.Status = VacancyStatuses.Published;
+            vacancy.PublishedRevisionId = currentRevision.Id;
+            vacancy.PublishedByUserId = actorUserId;
+            vacancy.PublishedAtUtc = now;
+            vacancy.UpdatedAtUtc = now;
+
+            _audit.StageEvent(new AuditWriteRequest
+            {
+                ActorUserId = actorUserId,
+                ActorRole = AppRoles.HRManager,
+                Module = "Recruitment",
+                Action = "VacancyPublished",
+                EntityType = "Vacancy",
+                EntityId = vacancy.Id,
+                Outcome = "success",
+                CorrelationId = Guid.NewGuid()
+            });
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new PublishVacancyOperationResponse
+            {
+                Success = true,
+                Code = "vacancy_published",
+
+                Message = isRepublication
+                    ? "Vacancy revision republished successfully."
+                    : "Vacancy published successfully.",
+
+                Vacancy = new PublishVacancyResponse
+                {
+                    VacancyId = vacancy.Id,
+                    VacancyRevisionId = currentRevision.Id,
+                    Revision = currentRevision.Revision,
+                    Title = currentRevision.Title,
+                    Status = vacancy.Status,
+
+                    PublishedRevisionId = currentRevision.Id,
+                    PublishedByUserId = actorUserId,
+                    PublishedAtUtc = now,
+                    ClosingDate = currentRevision.ClosingDate,
+                    IsRepublication = isRepublication,
+
+                    RowVersion = Convert.ToBase64String(
+                        vacancy.RowVersion),
+
+                    RevisionRowVersion = Convert.ToBase64String(
+                        currentRevision.RowVersion)
+                }
+            };
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return PublishFail(
+                "concurrency_conflict",
+                "Vacancy data changed. Reload and retry.");
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is SqlException sql &&
+                  sql.Number is 2601 or 2627 or 1205)
+        {
+            return PublishFail(
+                "concurrency_conflict",
+                "Conflicting vacancy publication. Reload and retry.");
+        }
+        catch (SqlException ex)
+            when (ex.Number == 1205)
+        {
+            return PublishFail(
+                "concurrency_conflict",
+                "Concurrent vacancy publication. Reload and retry.");
+        }
+        catch (InvalidOperationException ex)
+            when (IsSqlDeadlock(ex))
+        {
+            return PublishFail(
+                "concurrency_conflict",
+                "Concurrent vacancy publication. Reload and retry.");
+        }
+    }
+
+    private static CloseVacancyOperationResponse CloseFail(
+        string code,
+        string message)
+    {
+        return new CloseVacancyOperationResponse
+        {
+            Success = false,
+            Code = code,
+            Message = message
+        };
+    }
+
+    // API-071: Close a published vacancy
+    // Requirements: VAC-05, VAC-06
+    public async Task<CloseVacancyOperationResponse> CloseAsync(
+        Guid actorUserId,
+        Guid vacancyId,
+        CloseVacancyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await IsHrAsync(actorUserId))
+        {
+            return CloseFail(
+                "forbidden",
+                "Access denied.");
+        }
+
+        if (request is null ||
+            vacancyId == Guid.Empty ||
+            request.VacancyRevisionId == Guid.Empty)
+        {
+            return CloseFail(
+                "validation_error",
+                "Vacancy and revision IDs are required.");
+        }
+
+        if (!TryReadRowVersion(
+                request.RowVersion,
+                out var vacancyRowVersion) ||
+            !TryReadRowVersion(
+                request.RevisionRowVersion,
+                out var revisionRowVersion))
+        {
+            return CloseFail(
+                "validation_error",
+                "Valid row versions are required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ClosureReason) ||
+            request.ClosureReason.Length > 2000)
+        {
+            return CloseFail(
+                "validation_error",
+                "Closure reason is required and must not exceed 2000 characters.");
+        }
+
+        var closureReason = request.ClosureReason.Trim();
+
+        try
+        {
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.Serializable,
+                    cancellationToken);
+
+            var vacancy = await _db.Vacancies
+                .FirstOrDefaultAsync(
+                    v => v.Id == vacancyId,
+                    cancellationToken);
+
+            if (vacancy is null)
+            {
+                return CloseFail(
+                    "not_found",
+                    "Vacancy not found.");
+            }
+
+            var currentRevision = await _db.VacancyRevisions
+                .AsNoTracking()
+                .Where(r => r.VacancyId == vacancyId)
+                .OrderByDescending(r => r.Revision)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (currentRevision is null)
+            {
+                return CloseFail(
+                    "invalid_state",
+                    "Vacancy revision is missing.");
+            }
+
+            if (currentRevision.Id != request.VacancyRevisionId ||
+                !vacancy.RowVersion.SequenceEqual(
+                    vacancyRowVersion) ||
+                !currentRevision.RowVersion.SequenceEqual(
+                    revisionRowVersion))
+            {
+                return CloseFail(
+                    "concurrency_conflict",
+                    "Vacancy data changed. Reload and retry.");
+            }
+
+            if (vacancy.Status != VacancyStatuses.Published)
+            {
+                return CloseFail(
+                    "invalid_state",
+                    "Only published vacancies can be closed.");
+            }
+
+            if (!vacancy.PublishedRevisionId.HasValue ||
+                vacancy.PublishedRevisionId.Value != currentRevision.Id ||
+                !vacancy.PublishedByUserId.HasValue ||
+                !vacancy.PublishedAtUtc.HasValue)
+            {
+                return CloseFail(
+                    "invalid_state",
+                    "Vacancy publication metadata is inconsistent.");
+            }
+
+            if (vacancy.ClosedAtUtc.HasValue ||
+                vacancy.ClosedByUserId.HasValue ||
+                vacancy.ClosureReason is not null)
+            {
+                return CloseFail(
+                    "invalid_state",
+                    "Vacancy closure metadata is inconsistent.");
+            }
+
+            var now = DateTime.UtcNow;
+
+            vacancy.Status = VacancyStatuses.Closed;
+            vacancy.ClosedAtUtc = now;
+            vacancy.ClosedByUserId = actorUserId;
+            vacancy.ClosureReason = closureReason;
+            vacancy.UpdatedAtUtc = now;
+
+            _audit.StageEvent(new AuditWriteRequest
+            {
+                ActorUserId = actorUserId,
+                ActorRole = AppRoles.HRManager,
+                Module = "Recruitment",
+                Action = "VacancyClosed",
+                EntityType = "Vacancy",
+                EntityId = vacancy.Id,
+                Outcome = "success",
+                CorrelationId = Guid.NewGuid()
+            });
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new CloseVacancyOperationResponse
+            {
+                Success = true,
+                Code = "vacancy_closed",
+                Message = "Vacancy closed successfully.",
+
+                Vacancy = new CloseVacancyResponse
+                {
+                    VacancyId = vacancy.Id,
+                    VacancyRevisionId = currentRevision.Id,
+                    Revision = currentRevision.Revision,
+                    Title = currentRevision.Title,
+                    Status = vacancy.Status,
+
+                    PublishedRevisionId =
+                        vacancy.PublishedRevisionId.Value,
+
+                    PublishedByUserId =
+                        vacancy.PublishedByUserId.Value,
+
+                    PublishedAtUtc =
+                        AsUtc(vacancy.PublishedAtUtc.Value),
+
+                    ClosedByUserId = actorUserId,
+                    ClosedAtUtc = now,
+                    ClosureReason = closureReason,
+
+                    RowVersion = Convert.ToBase64String(
+                        vacancy.RowVersion),
+
+                    RevisionRowVersion = Convert.ToBase64String(
+                        currentRevision.RowVersion)
+                }
+            };
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return CloseFail(
+                "concurrency_conflict",
+                "Vacancy data changed. Reload and retry.");
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is SqlException sql &&
+                  sql.Number is 2601 or 2627 or 1205)
+        {
+            return CloseFail(
+                "concurrency_conflict",
+                "Conflicting vacancy closure. Reload and retry.");
+        }
+        catch (SqlException ex)
+            when (ex.Number == 1205)
+        {
+            return CloseFail(
+                "concurrency_conflict",
+                "Concurrent vacancy closure. Reload and retry.");
+        }
+        catch (InvalidOperationException ex)
+            when (IsSqlDeadlock(ex))
+        {
+            return CloseFail(
+                "concurrency_conflict",
+                "Concurrent vacancy closure. Reload and retry.");
         }
     }
 }
