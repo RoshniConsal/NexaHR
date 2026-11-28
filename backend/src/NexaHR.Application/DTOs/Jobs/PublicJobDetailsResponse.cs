@@ -4,6 +4,8 @@ public sealed class PublicJobDetailsResponse
 {
     public Guid JobId { get; init; }
 
+    public Guid VacancyRevisionId { get; init; }
+
     public string Title { get; init; } = string.Empty;
 
     public string DepartmentName { get; init; } = string.Empty;

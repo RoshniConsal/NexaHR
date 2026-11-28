@@ -1,3 +1,4 @@
+using NexaHR.Infrastructure.Persistence.Queries;
 using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -105,60 +106,12 @@ public sealed class VacancyService : IVacancyService
                 roles.Contains(AppRoles.CEO));
     }
 
-    private sealed class PublicJobRecord
-    {
-        public Vacancy Vacancy { get; init; } = null!;
-
-        public VacancyRevision Revision { get; init; } = null!;
-
-        public Department Department { get; init; } = null!;
-    }
-
-    private IQueryable<PublicJobRecord> QueryPublicJobs()
-    {
-        var sriLankaTime = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.UtcNow,
-            TimeZoneInfo.FindSystemTimeZoneById(
-                "Asia/Colombo"));
-
-        var today = DateOnly.FromDateTime(sriLankaTime);
-
-        return
-            from vacancy in _db.Vacancies.AsNoTracking()
-            join revision in _db.VacancyRevisions.AsNoTracking()
-                on vacancy.PublishedRevisionId equals (Guid?)revision.Id
-            join department in _db.Departments.AsNoTracking()
-                on revision.DepartmentId equals department.Id
-            where vacancy.Status == VacancyStatuses.Published
-                && revision.VacancyId == vacancy.Id
-                && vacancy.DepartmentId == revision.DepartmentId
-                && vacancy.PublishedAtUtc.HasValue
-                && vacancy.PublishedByUserId.HasValue
-                && revision.SubmittedAtUtc.HasValue
-                && revision.SubmittedByUserId.HasValue
-                && revision.ClosingDate >= today
-                && !department.IsArchived
-                && !_db.VacancyRevisions.Any(r =>
-                    r.VacancyId == vacancy.Id &&
-                    r.Revision > revision.Revision)
-                && _db.VacancyDecisions.Any(d =>
-                    d.VacancyRevisionId == revision.Id &&
-                    d.ApproverRole == AppRoles.CEO &&
-                    d.Decision == VacancyDecisionTypes.Approved)
-            select new PublicJobRecord
-            {
-                Vacancy = vacancy,
-                Revision = revision,
-                Department = department
-            };
-    }
-
     // API-061: Public listing of published open jobs
     public async Task<PublicJobListResponse> GetPublicJobsAsync(
         PublicJobQuery request,
         CancellationToken cancellationToken = default)
     {
-        var query = QueryPublicJobs();
+        var query = PublishedVacancyQuery.Query(_db);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -217,6 +170,7 @@ public sealed class VacancyService : IVacancyService
                 new PublicJobListItemResponse
                 {
                     JobId = x.Vacancy.Id,
+                    VacancyRevisionId = x.Revision.Id,
                     Title = x.Revision.Title,
                     DepartmentName = x.Department.Name,
                     EmploymentType = x.Revision.EmploymentType,
@@ -238,11 +192,12 @@ public sealed class VacancyService : IVacancyService
         if (jobId == Guid.Empty)
             return null;
 
-        var record = await QueryPublicJobs()
+        var record = await PublishedVacancyQuery.Query(_db)
             .Where(x => x.Vacancy.Id == jobId)
             .Select(x => new
             {
                 JobId = x.Vacancy.Id,
+                VacancyRevisionId = x.Revision.Id,
                 Title = x.Revision.Title,
                 DepartmentName = x.Department.Name,
                 EmploymentType = x.Revision.EmploymentType,
@@ -279,6 +234,7 @@ public sealed class VacancyService : IVacancyService
         return new PublicJobDetailsResponse
         {
             JobId = record.JobId,
+            VacancyRevisionId = record.VacancyRevisionId,
             Title = record.Title,
             DepartmentName = record.DepartmentName,
             EmploymentType = record.EmploymentType,

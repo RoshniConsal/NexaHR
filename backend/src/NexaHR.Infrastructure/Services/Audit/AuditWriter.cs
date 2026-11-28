@@ -150,6 +150,76 @@ public sealed class AuditWriter : IAuditWriter
                 ||
 
                 (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
+                 action == "ApplicationWithdrawn" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
+                 action == "ApplicationSubmitted" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "ApplicationConsent" &&
+                 action == "ApplicationAiConsentChanged" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
+                 action == "ApplicationStageChanged" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CvReviewVersion" &&
+                 action is ("CvReviewDraftSaved" or "CvReviewConfirmed" or "CvReviewRevalidated") &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CvExtractionRun" &&
+                 action == "CvExtractionQueued" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+            (module == "Recruitment" &&
+                 entityType == "CvMatchRun" &&
+                 action == "CvMatchCreated" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+                (module == "Recruitment" &&
+                 entityType == "SkillCatalogueVersion" &&
+                 action == "SkillCataloguePublished" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
                  entityType == "CvDocument" &&
                  role == AppRoles.Candidate &&
                  hasEntityId &&
@@ -214,7 +284,34 @@ public sealed class AuditWriter : IAuditWriter
                  ))
             );
 
-        if (!isAllowedEvent)
+        // AI analysis audit events contain identifiers
+        // and safe status codes only.
+        var isAiAnalysisEvent =
+            module == "Recruitment" &&
+            entityType == "CvAiAnalysisRun" &&
+            hasEntityId &&
+            (
+                (action == "CvAiAnalysisQueued" &&
+                 role == AppRoles.HRManager &&
+                 outcome == "success" &&
+                 reasonCode is null)
+
+                ||
+
+                (action == "CvAiAnalysisCompleted" &&
+                 role == "System" &&
+                 outcome == "success" &&
+                 reasonCode is null)
+
+                ||
+
+                (action == "CvAiAnalysisFailed" &&
+                 role == "System" &&
+                 outcome == "failure" &&
+                 reasonCode is not null)
+            );
+
+        if (!isAllowedEvent && !isAiAnalysisEvent)
         {
             throw new ArgumentException(
                 "Audit event is not approved.");

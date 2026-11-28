@@ -1,3 +1,5 @@
+using NexaHR.Infrastructure.Persistence.Configurations.CvReviews;
+using NexaHR.Infrastructure.Persistence.Configurations.CvMatching;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -5,6 +7,7 @@ using NexaHR.Domain.Entities;
 using NexaHR.Infrastructure.Identity;
 using NexaHR.Infrastructure.Persistence.Configurations.Vacancies;
 using NexaHR.Infrastructure.Persistence.Configurations.CvDocuments;
+using NexaHR.Infrastructure.Persistence.Configurations.Applications;
 
 namespace NexaHR.Infrastructure.Persistence;
 
@@ -58,6 +61,24 @@ public class NexaHRDbContext
     public DbSet<CvDocument> CvDocuments =>
         Set<CvDocument>();
 
+    public DbSet<CandidateProfile> CandidateProfiles =>
+        Set<CandidateProfile>();
+
+    public DbSet<CvExtractionRun> CvExtractionRuns
+        => Set<CvExtractionRun>();
+
+    public DbSet<CvReviewVersion> CvReviewVersions
+        => Set<CvReviewVersion>();
+
+    public DbSet<CandidateApplication> CandidateApplications =>
+        Set<CandidateApplication>();
+
+    public DbSet<ApplicationStageEvent> ApplicationStageEvents =>
+        Set<ApplicationStageEvent>();
+
+    public DbSet<ApplicationConsent> ApplicationConsents =>
+        Set<ApplicationConsent>();
+
     public DbSet<Vacancy> Vacancies =>
         Set<Vacancy>();
 
@@ -69,6 +90,186 @@ public class NexaHRDbContext
 
     public DbSet<VacancyDecision> VacancyDecisions =>
         Set<VacancyDecision>();
+
+    public DbSet<CvMatchRun> CvMatchRuns =>
+        Set<CvMatchRun>();
+
+    public DbSet<SkillCatalogueVersion> SkillCatalogueVersions =>
+        Set<SkillCatalogueVersion>();
+
+    public DbSet<CvAiAnalysisRun> CvAiAnalysisRuns =>
+        Set<CvAiAnalysisRun>();
+
+    private void EnsureAiAnalysisHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        foreach (var entry in ChangeTracker
+            .Entries<CvAiAnalysisRun>())
+        {
+            if (entry.State == EntityState.Deleted)
+            {
+                throw new InvalidOperationException(
+                    "AI analysis history cannot be deleted.");
+            }
+
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Entity.Status != "Queued" ||
+                    entry.Entity.AttemptCount != 0 ||
+                    entry.Entity.StartedAtUtc.HasValue ||
+                    entry.Entity.CompletedAtUtc.HasValue ||
+                    entry.Entity.ResultJson is not null ||
+                    entry.Entity.FailureCode is not null)
+                {
+                    throw new InvalidOperationException(
+                        "New AI analysis runs must start in Queued status.");
+                }
+
+                continue;
+            }
+
+            if (entry.State != EntityState.Modified)
+            {
+                continue;
+            }
+
+            var previousStatus = entry
+                .Property(x => x.Status)
+                .OriginalValue;
+
+            var currentStatus = entry.Entity.Status;
+
+            if (previousStatus is "Ready" or "Failed")
+            {
+                throw new InvalidOperationException(
+                    "Completed AI analysis runs are immutable.");
+            }
+
+            string[] mutableProperties =
+            [
+                nameof(CvAiAnalysisRun.Status),
+                nameof(CvAiAnalysisRun.AttemptCount),
+                nameof(CvAiAnalysisRun.StartedAtUtc),
+                nameof(CvAiAnalysisRun.CompletedAtUtc),
+                nameof(CvAiAnalysisRun.ResultJson),
+                nameof(CvAiAnalysisRun.FailureCode)
+            ];
+
+            if (entry.Properties.Any(property =>
+                property.IsModified &&
+                !mutableProperties.Contains(
+                    property.Metadata.Name,
+                    StringComparer.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    "AI analysis source provenance cannot be changed.");
+            }
+
+            var previousAttempts = entry
+                .Property(x => x.AttemptCount)
+                .OriginalValue;
+
+            var currentAttempts =
+                entry.Entity.AttemptCount;
+
+            if (currentAttempts < previousAttempts ||
+                currentAttempts > 2 ||
+                currentAttempts < 0 ||
+                currentAttempts - previousAttempts > 1)
+            {
+                throw new InvalidOperationException(
+                    "Invalid AI analysis attempt count.");
+            }
+
+            var validTransition =
+                (previousStatus == "Queued" &&
+                 currentStatus == "Processing") ||
+                (previousStatus == "Processing" &&
+                 currentStatus is
+                     "Processing" or "Ready" or "Failed");
+
+            if (!validTransition)
+            {
+                throw new InvalidOperationException(
+                    "Invalid AI analysis lifecycle transition.");
+            }
+
+            if (previousStatus == "Queued" &&
+                (currentAttempts != 0 ||
+                 !entry.Entity.StartedAtUtc.HasValue))
+            {
+                throw new InvalidOperationException(
+                    "AI analysis must be claimed before inference.");
+            }
+
+            if (previousStatus == "Processing" &&
+                entry.Property(x => x.StartedAtUtc).IsModified)
+            {
+                throw new InvalidOperationException(
+                    "AI analysis start timestamp cannot be changed.");
+            }
+
+            if (currentStatus == "Processing" &&
+                (entry.Entity.CompletedAtUtc.HasValue ||
+                 entry.Entity.ResultJson is not null ||
+                 entry.Entity.FailureCode is not null))
+            {
+                throw new InvalidOperationException(
+                    "Processing analysis cannot contain a terminal result.");
+            }
+
+            if (currentStatus == "Ready" &&
+                (currentAttempts < 1 ||
+                 !entry.Entity.CompletedAtUtc.HasValue ||
+                 string.IsNullOrWhiteSpace(
+                     entry.Entity.ResultJson) ||
+                 entry.Entity.FailureCode is not null))
+            {
+                throw new InvalidOperationException(
+                    "Ready AI analysis requires a validated result.");
+            }
+
+            if (currentStatus == "Failed" &&
+                (!entry.Entity.CompletedAtUtc.HasValue ||
+                 entry.Entity.ResultJson is not null ||
+                 string.IsNullOrWhiteSpace(
+                     entry.Entity.FailureCode)))
+            {
+                throw new InvalidOperationException(
+                    "Failed AI analysis requires a safe failure code.");
+            }
+        }
+    }
+
+    private void EnsureMatchingHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidMatchChanges = ChangeTracker
+            .Entries<CvMatchRun>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidMatchChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing CV matching runs cannot be modified or deleted.");
+        }
+
+        var invalidCatalogueChanges = ChangeTracker
+            .Entries<SkillCatalogueVersion>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidCatalogueChanges)
+        {
+            throw new InvalidOperationException(
+                "Published skill catalogue versions cannot be modified or deleted.");
+        }
+    }
 
     private void EnsureAuditAppendOnly()
     {
@@ -185,11 +386,153 @@ public class NexaHRDbContext
         }
     }
 
+    private void EnsureCvHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidReviewChanges = ChangeTracker
+            .Entries<CvReviewVersion>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidReviewChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing CV review versions cannot be modified or deleted.");
+        }
+
+        foreach (var entry in ChangeTracker
+            .Entries<CvExtractionRun>())
+        {
+            if (entry.State == EntityState.Deleted)
+            {
+                throw new InvalidOperationException(
+                    "CV extraction history cannot be deleted.");
+            }
+
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Entity.Status != "Queued")
+                {
+                    throw new InvalidOperationException(
+                        "New extraction runs must start in Queued status.");
+                }
+
+                continue;
+            }
+
+            if (entry.State != EntityState.Modified)
+                continue;
+
+            var previousStatus = entry
+                .Property(e => e.Status)
+                .OriginalValue;
+
+            var currentStatus = entry.Entity.Status;
+
+            if (previousStatus is "ReadyForReview" or "Failed")
+            {
+                throw new InvalidOperationException(
+                    "Completed CV extraction runs cannot be modified.");
+            }
+
+            var immutablePropertiesChanged =
+                entry.Property(e => e.Id).IsModified ||
+                entry.Property(e => e.ApplicationId).IsModified ||
+                entry.Property(e => e.DocumentId).IsModified ||
+                entry.Property(e => e.Version).IsModified ||
+                entry.Property(e => e.SourceSha256Hash).IsModified ||
+                entry.Property(e => e.ParserVersion).IsModified ||
+                entry.Property(e => e.CreatedAtUtc).IsModified;
+
+            if (immutablePropertiesChanged)
+            {
+                throw new InvalidOperationException(
+                    "CV extraction source and provenance must be preserved.");
+            }
+
+            var allowedTransition =
+                (previousStatus, currentStatus) switch
+                {
+                    ("Queued", "Processing") => true,
+                    ("Processing", "ReadyForReview") => true,
+                    ("Processing", "Failed") => true,
+                    _ => false
+                };
+
+            if (!allowedTransition)
+            {
+                throw new InvalidOperationException(
+                    "Invalid CV extraction lifecycle transition.");
+            }
+
+            if (previousStatus == "Processing" &&
+                entry.Property(e => e.StartedAtUtc).IsModified)
+            {
+                throw new InvalidOperationException(
+                    "Extraction start timestamp cannot be modified.");
+            }
+        }
+    }
+
+    private void EnsureApplicationHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidStageHistoryChanges = ChangeTracker
+            .Entries<ApplicationStageEvent>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidStageHistoryChanges)
+        {
+            throw new InvalidOperationException(
+                "Application stage history cannot be modified or deleted.");
+        }
+
+        var invalidConsentChanges = ChangeTracker
+            .Entries<ApplicationConsent>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidConsentChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing application consent events cannot be modified or deleted.");
+        }
+
+        var invalidApplicationChanges = ChangeTracker
+            .Entries<CandidateApplication>()
+            .Any(entry =>
+                entry.State == EntityState.Deleted ||
+                (entry.State == EntityState.Modified &&
+                    (entry.Property(a => a.CandidateUserId).IsModified ||
+                     entry.Property(a => a.VacancyId).IsModified ||
+                     entry.Property(a => a.VacancyRevisionId).IsModified ||
+                     entry.Property(a => a.DocumentId).IsModified ||
+                     entry.Property(a => a.DuplicateEmailFlag).IsModified ||
+                     entry.Property(a => a.DuplicatePhoneFlag).IsModified ||
+                     entry.Property(a => a.AppliedAtUtc).IsModified)));
+
+        if (invalidApplicationChanges)
+        {
+            throw new InvalidOperationException(
+                "Submitted application identity and source references must be preserved.");
+        }
+    }
+
     public override int SaveChanges(
         bool acceptAllChangesOnSuccess)
     {
         EnsureAuditAppendOnly();
         EnsureVacancyHistoryImmutable();
+        EnsureApplicationHistoryImmutable();
+        EnsureCvHistoryImmutable();
+        EnsureMatchingHistoryImmutable();
+        EnsureAiAnalysisHistoryImmutable();
 
         return base.SaveChanges(
             acceptAllChangesOnSuccess);
@@ -201,6 +544,10 @@ public class NexaHRDbContext
     {
         EnsureAuditAppendOnly();
         EnsureVacancyHistoryImmutable();
+        EnsureApplicationHistoryImmutable();
+        EnsureCvHistoryImmutable();
+        EnsureMatchingHistoryImmutable();
+        EnsureAiAnalysisHistoryImmutable();
 
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
@@ -212,6 +559,17 @@ public class NexaHRDbContext
         base.OnModelCreating(builder);
 
         builder.ApplyConfiguration(new CvDocumentConfiguration());
+        builder.ApplyConfiguration(new CandidateProfileConfiguration());
+        builder.ApplyConfiguration(new CandidateApplicationConfiguration());
+        builder.ApplyConfiguration(new CvExtractionRunConfiguration());
+        builder.ApplyConfiguration(new CvReviewVersionConfiguration());
+        builder.ApplyConfiguration(new CvMatchRunConfiguration());
+        builder.ApplyConfiguration(
+            new NexaHR.Infrastructure.Persistence.Configurations
+                .CvAiAnalysis.CvAiAnalysisRunConfiguration());
+        builder.ApplyConfiguration(new SkillCatalogueVersionConfiguration());
+        builder.ApplyConfiguration(new ApplicationStageEventConfiguration());
+        builder.ApplyConfiguration(new ApplicationConsentConfiguration());
         builder.ApplyConfiguration(new VacancyConfiguration());
         builder.ApplyConfiguration(new VacancyRevisionConfiguration());
         builder.ApplyConfiguration(new VacancyCriterionConfiguration());
