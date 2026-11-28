@@ -311,15 +311,40 @@ public sealed class AuditWriter : IAuditWriter
                  reasonCode is not null)
             );
 
-        if (!isAllowedEvent && !isAiAnalysisEvent)
+        var isEmployeeUpdateEvent =
+            module == "Employees" &&
+            entityType == "Employee" &&
+            action == "EmployeeUpdated" &&
+            role == AppRoles.HRManager &&
+            outcome == "success" &&
+            hasEntityId &&
+            reasonCode is null;
+
+        var isWorkEmailEvent =
+            module == "Employees" &&
+            entityType == "Employee" &&
+            outcome == "success" &&
+            hasEntityId &&
+            reasonCode is null &&
+            (
+                (action == "WorkEmailVerificationRequested" &&
+                 role == AppRoles.HRManager) ||
+                (action == "WorkEmailVerified" &&
+                 role == "System")
+            );
+
+        if (!isAllowedEvent &&
+            !isWorkEmailEvent &&
+            !isAiAnalysisEvent &&
+            !isEmployeeUpdateEvent)
         {
             throw new ArgumentException(
                 "Audit event is not approved.");
         }
 
         // Conservative visibility policy.
-        // Only explicitly approved non-personal
-        // company and department events are visible.
+        // HR can access approved employee audit metadata.
+        // CEO visibility remains restricted.
 
         var isDepartmentEvent =
             module == "Departments" &&
@@ -361,7 +386,11 @@ public sealed class AuditWriter : IAuditWriter
             ReasonCode = reasonCode,
 
             IsHrVisible =
-                isDepartmentEvent || isCompanyEvent,
+                isDepartmentEvent ||
+                isCompanyEvent ||
+                isEmployeeUpdateEvent ||
+                (isWorkEmailEvent &&
+                 role == AppRoles.HRManager),
 
             IsCeoVisible =
                 isDepartmentEvent || isCompanyEvent,

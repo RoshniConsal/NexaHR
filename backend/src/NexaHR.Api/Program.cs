@@ -142,6 +142,11 @@ builder.Services.AddScoped<ICvFileStorage, CvFileStorage>();
 builder.Services.AddScoped<ICvFileValidator, CvFileValidator>();
 builder.Services.AddScoped<ICvMalwareScanner, ClamAvMalwareScanner>();
 
+// Package 3: Employee Management
+builder.Services.AddScoped<
+    NexaHR.Application.Interfaces.Employees.IEmployeeService,
+    NexaHR.Infrastructure.Services.Employees.EmployeeService>();
+
 var app = builder.Build();
 
 // Initialize configured application roles

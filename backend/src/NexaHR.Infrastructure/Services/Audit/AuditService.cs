@@ -81,6 +81,19 @@ public sealed class AuditService : IAuditService
                         a.ReasonCode == null &&
                         a.Action == "CompanySettingsUpdated"
                     )
+                    ||
+                    (
+                        role == AppRoles.HRManager &&
+                        a.Module == "Employees" &&
+                        a.EntityType == "Employee" &&
+                        a.EntityId != null &&
+                        a.EntityId != Guid.Empty &&
+                        a.ReasonCode == null &&
+                        (
+                            a.Action == "EmployeeUpdated" ||
+                            a.Action == "WorkEmailVerificationRequested"
+                        )
+                    )
                 ));
 
         return role == AppRoles.CEO
