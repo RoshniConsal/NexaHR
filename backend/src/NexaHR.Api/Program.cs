@@ -1,3 +1,5 @@
+using NexaHR.Infrastructure.Services.CvAiAnalysis;
+using NexaHR.Application.Interfaces.CvAiAnalysis;
 using NexaHR.Application.Interfaces.CvMatching;
 using NexaHR.Infrastructure.Services.CvMatching;
 using NexaHR.Application.Interfaces.CvExtractions;
@@ -107,7 +109,32 @@ builder.Services.AddScoped<ICvDocumentService, CvDocumentService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<ICvReviewService, CvReviewService>();
 builder.Services.AddScoped<ICvExtractionService, CvExtractionService>();
-builder.Services.AddScoped<ICvMatchingService, CvMatchingService>();
+builder.Services.AddScoped<CvMatchingService>();
+
+builder.Services.AddScoped<ICvMatchingService>(
+    services => services.GetRequiredService<CvMatchingService>());
+
+// AI recruitment services.
+builder.Services.AddScoped<AiProcessingAuthorizationService>();
+builder.Services.AddScoped<ICvAiAnalysisService, CvAiAnalysisService>();
+builder.Services.AddScoped<CvAiAnalysisProcessor>();
+builder.Services.AddScoped<CvAiAnalysisRecoveryService>();
+
+builder.Services.AddHttpClient<
+    IAiAnalysisProvider,
+    OllamaAnalysisProvider>(client =>
+{
+    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+    new System.Net.Http.HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseProxy = false,
+        UseCookies = false
+    });
+
+builder.Services.AddHostedService<CvAiAnalysisWorker>();
 builder.Services.AddScoped<ISkillCatalogueService, SkillCatalogueService>();
 builder.Services.AddScoped<CvExtractionProcessor>();
 builder.Services.AddHostedService<CvExtractionWorker>();

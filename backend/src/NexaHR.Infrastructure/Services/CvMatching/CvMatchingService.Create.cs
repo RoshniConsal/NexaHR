@@ -91,7 +91,13 @@ public sealed partial class CvMatchingService
             var values = CvReviewJsonReader.ReadValues(
                 source.Review.ValuesJson);
 
-            CvStructuredValuesValidator.ValidateDraft(values);
+            if (CvStructuredValuesValidator
+                    .ValidateConfirmation(values).Count != 0)
+            {
+                return Fail<CvMatchResponse>(
+                    "invalid_matching_source",
+                    "Confirmed CV values are invalid.");
+            }
 
             var catalogueIndex =
                 RuleBasedMatchingEngine.BuildIndex(catalogue);

@@ -659,6 +659,168 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.ToTable("ConsumedRefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvAiAnalysisRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationConsentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CvMatchRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CvReviewVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("InputJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("InputSchemaVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InputSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ModelDigest")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("OutputSchemaVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ProcessingPolicyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationConsentId");
+
+                    b.HasIndex("CvMatchRunId");
+
+                    b.HasIndex("CvReviewVersionId");
+
+                    b.HasIndex("ProcessingPolicyId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("VacancyRevisionId");
+
+                    b.HasIndex("ApplicationId", "ApplicationConsentId");
+
+                    b.HasIndex("ApplicationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentId", "SourceSha256Hash");
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.HasIndex("ApplicationId", "DocumentId", "CvReviewVersionId", "VacancyRevisionId");
+
+                    b.HasIndex("ApplicationId", "DocumentId", "VacancyRevisionId", "CvReviewVersionId", "SourceSha256Hash", "CvMatchRunId");
+
+                    b.ToTable("CvAiAnalysisRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Attempts", "[AttemptCount] >= 0 AND [AttemptCount] <= 2");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_InputHash", "LEN([InputSha256Hash]) = 64 AND [InputSha256Hash] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9A-Fa-f]%'");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_InputJson", "ISJSON([InputJson], OBJECT) = 1 AND DATALENGTH([InputJson]) <= 524288");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Lifecycle", "(([Status] = 'Queued' AND [AttemptCount] = 0 AND [StartedAtUtc] IS NULL AND [CompletedAtUtc] IS NULL AND [ResultJson] IS NULL AND [FailureCode] IS NULL) OR ([Status] = 'Processing' AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NULL AND [ResultJson] IS NULL AND [FailureCode] IS NULL) OR ([Status] = 'Ready' AND [AttemptCount] BETWEEN 1 AND 2 AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NOT NULL AND [ResultJson] IS NOT NULL AND [FailureCode] IS NULL) OR ([Status] = 'Failed' AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NOT NULL AND [ResultJson] IS NULL AND [FailureCode] IS NOT NULL AND LEN(LTRIM(RTRIM([FailureCode]))) > 0))");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Model", "LEN(LTRIM(RTRIM([Model]))) > 0");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_ModelDigest", "LEN([ModelDigest]) = 64 AND [ModelDigest] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9A-Fa-f]%'");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_PromptVersion", "LEN(LTRIM(RTRIM([PromptVersion]))) > 0");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Provider", "LEN(LTRIM(RTRIM([Provider]))) > 0");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_ResultJson", "[ResultJson] IS NULL OR (ISJSON([ResultJson], OBJECT) = 1 AND DATALENGTH([ResultJson]) <= 524288)");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_SchemaVersions", "[InputSchemaVersion] > 0 AND [OutputSchemaVersion] > 0");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_SourceHash", "LEN([SourceSha256Hash]) = 64 AND [SourceSha256Hash] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9A-Fa-f]%'");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Status", "[Status] IN ('Queued','Processing','Ready','Failed')");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_TimestampOrder", "([StartedAtUtc] IS NULL OR [StartedAtUtc] >= [CreatedAtUtc]) AND ([CompletedAtUtc] IS NULL OR ([StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] >= [StartedAtUtc]))");
+
+                            t.HasCheckConstraint("CK_CvAiAnalysisRun_Version", "[Version] > 0");
+                        });
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.CvDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2030,6 +2192,62 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AuthSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvAiAnalysisRun", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.ProcessingPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.ApplicationConsent", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "ApplicationConsentId")
+                        .HasPrincipalKey("ApplicationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId")
+                        .HasPrincipalKey("Id", "DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId", "SourceSha256Hash")
+                        .HasPrincipalKey("Id", "Sha256Hash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvReviewVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId", "CvReviewVersionId", "VacancyRevisionId")
+                        .HasPrincipalKey("ApplicationId", "DocumentId", "Id", "VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvMatchRun", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId", "VacancyRevisionId", "CvReviewVersionId", "SourceSha256Hash", "CvMatchRunId")
+                        .HasPrincipalKey("ApplicationId", "DocumentId", "VacancyRevisionId", "CvReviewVersionId", "SourceSha256Hash", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

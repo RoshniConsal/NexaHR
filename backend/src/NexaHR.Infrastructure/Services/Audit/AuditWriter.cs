@@ -275,7 +275,34 @@ public sealed class AuditWriter : IAuditWriter
                  ))
             );
 
-        if (!isAllowedEvent)
+        // AI analysis audit events contain identifiers
+        // and safe status codes only.
+        var isAiAnalysisEvent =
+            module == "Recruitment" &&
+            entityType == "CvAiAnalysisRun" &&
+            hasEntityId &&
+            (
+                (action == "CvAiAnalysisQueued" &&
+                 role == AppRoles.HRManager &&
+                 outcome == "success" &&
+                 reasonCode is null)
+
+                ||
+
+                (action == "CvAiAnalysisCompleted" &&
+                 role == "System" &&
+                 outcome == "success" &&
+                 reasonCode is null)
+
+                ||
+
+                (action == "CvAiAnalysisFailed" &&
+                 role == "System" &&
+                 outcome == "failure" &&
+                 reasonCode is not null)
+            );
+
+        if (!isAllowedEvent && !isAiAnalysisEvent)
         {
             throw new ArgumentException(
                 "Audit event is not approved.");
