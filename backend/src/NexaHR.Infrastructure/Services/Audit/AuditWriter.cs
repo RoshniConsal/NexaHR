@@ -151,6 +151,15 @@ public sealed class AuditWriter : IAuditWriter
 
                 (module == "Recruitment" &&
                  entityType == "CandidateApplication" &&
+                 action == "ApplicationWithdrawn" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
                  action == "ApplicationSubmitted" &&
                  role == AppRoles.Candidate &&
                  hasEntityId &&

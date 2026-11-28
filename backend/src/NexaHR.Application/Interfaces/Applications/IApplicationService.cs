@@ -4,6 +4,15 @@ namespace NexaHR.Application.Interfaces.Applications;
 
 public interface IApplicationService
 {
+
+    // API-077: Candidate-owned application withdrawal.
+    Task<ApplicationWithdrawalOperationResponse>
+        WithdrawAsync(
+            Guid actorUserId,
+            Guid applicationId,
+            ApplicationWithdrawalRequest request,
+            CancellationToken cancellationToken = default);
+
     Task<ApplicationListOperationResponse> GetApplicationsAsync(
         Guid actorUserId,
         ApplicationQuery request,

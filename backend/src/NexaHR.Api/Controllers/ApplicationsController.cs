@@ -321,6 +321,90 @@ public sealed class ApplicationsController : ControllerBase
         };
     }
 
+
+    // API-077: Candidate-owned application withdrawal.
+    [HttpPost("{applicationId}/withdrawals")]
+    [Authorize(Roles = AppRoles.Candidate)]
+    [ResponseCache(
+        NoStore = true,
+        Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(
+        typeof(ApplicationWithdrawalResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    [ProducesResponseType(500)]
+    [ProducesResponseType(503)]
+    public async Task<IActionResult> Withdraw(
+        [FromRoute] Guid applicationId,
+        [FromBody] ApplicationWithdrawalRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier),
+                out var actorUserId) ||
+            actorUserId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _service.WithdrawAsync(
+            actorUserId,
+            applicationId,
+            request,
+            cancellationToken);
+
+        if (result.Success && result.Data is not null)
+        {
+            return Ok(result.Data);
+        }
+
+        return result.Code switch
+        {
+            "forbidden" => StatusCode(403, new
+            {
+                code = "forbidden",
+                message = "Access denied."
+            }),
+
+            "invalid_withdrawal_request" =>
+                BadRequest(result),
+
+            "application_not_found" =>
+                NotFound(result),
+
+            "application_conflict" or
+            "application_withdrawal_not_allowed" =>
+                Conflict(result),
+
+            "withdrawal_dependencies_unavailable" =>
+                StatusCode(503, result),
+
+            "application_database_error" =>
+                StatusCode(503, new
+                {
+                    code = result.Code,
+                    message = result.Message
+                }),
+
+            "application_source_invalid" =>
+                StatusCode(500, new
+                {
+                    code = "application_source_invalid",
+                    message = "Application data is unavailable."
+                }),
+
+            _ => StatusCode(500, new
+            {
+                code = "application_withdrawal_failed",
+                message = "Unable to withdraw application."
+            })
+        };
+    }
+
     // API-078: Candidate-owned provider-specific AI consent.
     [HttpPut("{applicationId}/ai-consent")]
     [Authorize(Roles = AppRoles.Candidate)]

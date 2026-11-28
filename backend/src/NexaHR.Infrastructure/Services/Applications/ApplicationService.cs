@@ -18,7 +18,7 @@ using NexaHR.Infrastructure.Persistence.Queries;
 
 namespace NexaHR.Infrastructure.Services.Applications;
 
-public sealed class ApplicationService : IApplicationService
+public sealed partial class ApplicationService : IApplicationService
 {
     private readonly NexaHRDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
