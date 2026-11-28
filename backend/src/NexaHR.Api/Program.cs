@@ -1,3 +1,5 @@
+using NexaHR.Application.Interfaces.CvExtractions;
+using NexaHR.Infrastructure.Services.CvExtractions;
 using NexaHR.Application.Interfaces.Applications;
 using NexaHR.Application.Interfaces.CvReviews;
 using NexaHR.Infrastructure.Services.CvReviews;
@@ -102,6 +104,9 @@ builder.Services.AddScoped<IPrivacyService, PrivacyService>();
 builder.Services.AddScoped<ICvDocumentService, CvDocumentService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<ICvReviewService, CvReviewService>();
+builder.Services.AddScoped<ICvExtractionService, CvExtractionService>();
+builder.Services.AddScoped<CvExtractionProcessor>();
+builder.Services.AddHostedService<CvExtractionWorker>();
 builder.Services.AddScoped<ICvFileStorage, CvFileStorage>();
 builder.Services.AddScoped<ICvFileValidator, CvFileValidator>();
 builder.Services.AddScoped<ICvMalwareScanner, ClamAvMalwareScanner>();

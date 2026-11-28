@@ -186,6 +186,15 @@ public sealed class AuditWriter : IAuditWriter
                 ||
 
                 (module == "Recruitment" &&
+                 entityType == "CvExtractionRun" &&
+                 action == "CvExtractionQueued" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
                  entityType == "CvDocument" &&
                  role == AppRoles.Candidate &&
                  hasEntityId &&
