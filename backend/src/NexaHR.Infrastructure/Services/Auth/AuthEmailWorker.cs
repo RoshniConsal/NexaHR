@@ -1,3 +1,4 @@
+using NexaHR.Infrastructure.Services.Employees;
 using NexaHR.Infrastructure.Services.Invitations;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -128,6 +129,35 @@ public sealed class AuthEmailWorker : BackgroundService
                     }
                 }
 
+                if (entry.EmailType == "WorkEmailVerification")
+                {
+                    var checkTime = DateTime.UtcNow;
+
+                    var valid = WorkEmailToken.TryHash(
+                        token, out var tokenHash)
+                        && await db.WorkEmailVerifications
+                            .AsNoTracking()
+                            .AnyAsync(v =>
+                                v.TokenHash == tokenHash &&
+                                v.ProposedEmail == entry.RecipientEmail &&
+                                v.ConfirmedAtUtc == null &&
+                                v.RevokedAtUtc == null &&
+                                v.ExpiresAtUtc > checkTime,
+                                cancellationToken);
+
+                    if (!valid)
+                    {
+                        entry.ProtectedToken = string.Empty;
+                        entry.ExpiresAtUtc = checkTime;
+                        entry.NextAttemptAtUtc = null;
+
+                        await db.SaveChangesAsync(
+                            cancellationToken);
+
+                        continue;
+                    }
+                }
+
                 await SendEmailAsync(
                     entry.RecipientEmail,
                     entry.EmailType,
@@ -196,6 +226,10 @@ public sealed class AuthEmailWorker : BackgroundService
             "ResetPassword" => (
                 "reset-password",
                 "NexaHR - Reset your password"),
+
+            "WorkEmailVerification" => (
+                "verify-work-email",
+                "NexaHR - Verify your work email"),
 
             "Invitation" => (
                 "accept-invitation",

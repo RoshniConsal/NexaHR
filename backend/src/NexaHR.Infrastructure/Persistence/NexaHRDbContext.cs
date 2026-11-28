@@ -1,3 +1,4 @@
+using NexaHR.Infrastructure.Persistence.Configurations.Employees;
 using NexaHR.Infrastructure.Persistence.Configurations.CvReviews;
 using NexaHR.Infrastructure.Persistence.Configurations.CvMatching;
 using Microsoft.AspNetCore.Identity;
@@ -99,6 +100,32 @@ public class NexaHRDbContext
 
     public DbSet<CvAiAnalysisRun> CvAiAnalysisRuns =>
         Set<CvAiAnalysisRun>();
+
+    public DbSet<Employee> Employees =>
+        Set<Employee>();
+
+    public DbSet<EmploymentHistory> EmploymentHistories =>
+        Set<EmploymentHistory>();
+
+    public DbSet<WorkEmailVerification> WorkEmailVerifications =>
+        Set<WorkEmailVerification>();
+
+    private void EnsureEmploymentHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidChanges = ChangeTracker
+            .Entries<EmploymentHistory>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidChanges)
+        {
+            throw new InvalidOperationException(
+                "Employment history cannot be modified or deleted.");
+        }
+    }
 
     private void EnsureAiAnalysisHistoryImmutable()
     {
@@ -528,6 +555,7 @@ public class NexaHRDbContext
         bool acceptAllChangesOnSuccess)
     {
         EnsureAuditAppendOnly();
+        EnsureEmploymentHistoryImmutable();
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
@@ -543,6 +571,7 @@ public class NexaHRDbContext
         CancellationToken cancellationToken = default)
     {
         EnsureAuditAppendOnly();
+        EnsureEmploymentHistoryImmutable();
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
@@ -557,6 +586,16 @@ public class NexaHRDbContext
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.ApplyConfiguration(
+            new EmployeeConfiguration());
+
+        builder.ApplyConfiguration(
+            new EmploymentHistoryConfiguration());
+
+        builder.ApplyConfiguration(
+            new WorkEmailVerificationConfiguration());
+
 
         builder.ApplyConfiguration(new CvDocumentConfiguration());
         builder.ApplyConfiguration(new CandidateProfileConfiguration());
