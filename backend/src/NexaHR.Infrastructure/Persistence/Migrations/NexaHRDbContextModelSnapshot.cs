@@ -1384,6 +1384,117 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.ToTable("EmploymentHistories", (string)null);
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.HrPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("CurrentPublishedVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DraftContent")
+                        .HasMaxLength(50000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("DraftRequiresAcknowledgement")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DraftTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("DraftVisibleToCeo")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("DraftVisibleToEmployees")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("DraftVisibleToHr")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasDraft")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CurrentPublishedVersion");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("HrPolicies", (string)null);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.HrPolicyVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PublishedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresAcknowledgement")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("VisibleToCeo")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("VisibleToEmployees")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("VisibleToHr")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublishedByUserId");
+
+                    b.HasIndex("PolicyId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("HrPolicyVersions", (string)null);
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.LegalHold", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1537,6 +1648,31 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecipientUserId", "IsRead", "CreatedAtUtc");
 
                     b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.PolicyAcknowledgement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AcknowledgedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PolicyVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyVersionId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "AcknowledgedAtUtc");
+
+                    b.ToTable("PolicyAcknowledgements", (string)null);
                 });
 
             modelBuilder.Entity("NexaHR.Domain.Entities.ProcessingPolicy", b =>
@@ -2595,6 +2731,35 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.HrPolicy", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.HrPolicyVersion", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.HrPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.LegalHold", b =>
                 {
                     b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
@@ -2640,6 +2805,21 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.PolicyAcknowledgement", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.HrPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

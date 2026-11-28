@@ -147,6 +147,11 @@ builder.Services.AddScoped<
     NexaHR.Application.Interfaces.Employees.IEmployeeService,
     NexaHR.Infrastructure.Services.Employees.EmployeeService>();
 
+// Package 3: HR Policies
+builder.Services.AddScoped<
+    NexaHR.Application.Interfaces.Policies.IHrPolicyService,
+    NexaHR.Infrastructure.Services.Policies.HrPolicyService>();
+
 var app = builder.Build();
 
 // Initialize configured application roles

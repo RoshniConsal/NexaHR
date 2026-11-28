@@ -1,4 +1,5 @@
 using NexaHR.Infrastructure.Persistence.Configurations.Employees;
+using NexaHR.Infrastructure.Persistence.Configurations.Policies;
 using NexaHR.Infrastructure.Persistence.Configurations.CvReviews;
 using NexaHR.Infrastructure.Persistence.Configurations.CvMatching;
 using Microsoft.AspNetCore.Identity;
@@ -109,6 +110,44 @@ public class NexaHRDbContext
 
     public DbSet<WorkEmailVerification> WorkEmailVerifications =>
         Set<WorkEmailVerification>();
+
+    public DbSet<HrPolicy> HrPolicies =>
+        Set<HrPolicy>();
+
+    public DbSet<HrPolicyVersion> HrPolicyVersions =>
+        Set<HrPolicyVersion>();
+
+    public DbSet<PolicyAcknowledgement> PolicyAcknowledgements =>
+        Set<PolicyAcknowledgement>();
+
+    private void EnsurePolicyHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidVersionChanges = ChangeTracker
+            .Entries<HrPolicyVersion>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidVersionChanges)
+        {
+            throw new InvalidOperationException(
+                "Published policy versions cannot be modified or deleted.");
+        }
+
+        var invalidAcknowledgementChanges = ChangeTracker
+            .Entries<PolicyAcknowledgement>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidAcknowledgementChanges)
+        {
+            throw new InvalidOperationException(
+                "Policy acknowledgements cannot be modified or deleted.");
+        }
+    }
 
     private void EnsureEmploymentHistoryImmutable()
     {
@@ -556,6 +595,7 @@ public class NexaHRDbContext
     {
         EnsureAuditAppendOnly();
         EnsureEmploymentHistoryImmutable();
+        EnsurePolicyHistoryImmutable();
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
@@ -572,6 +612,7 @@ public class NexaHRDbContext
     {
         EnsureAuditAppendOnly();
         EnsureEmploymentHistoryImmutable();
+        EnsurePolicyHistoryImmutable();
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
@@ -595,6 +636,15 @@ public class NexaHRDbContext
 
         builder.ApplyConfiguration(
             new WorkEmailVerificationConfiguration());
+
+        builder.ApplyConfiguration(
+            new HrPolicyConfiguration());
+
+        builder.ApplyConfiguration(
+            new HrPolicyVersionConfiguration());
+
+        builder.ApplyConfiguration(
+            new PolicyAcknowledgementConfiguration());
 
 
         builder.ApplyConfiguration(new CvDocumentConfiguration());

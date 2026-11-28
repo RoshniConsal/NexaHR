@@ -333,10 +333,43 @@ public sealed class AuditWriter : IAuditWriter
                  role == "System")
             );
 
+        var isPolicyEvent =
+            module == "Policies" &&
+            outcome == "success" &&
+            hasEntityId &&
+            reasonCode is null &&
+            (
+                (entityType == "HrPolicy" &&
+                 role == AppRoles.HRManager &&
+                 action is
+                    ("PolicyCreated" or "PolicyDraftUpdated"))
+
+                ||
+
+                (entityType == "HrPolicyVersion" &&
+                 role == AppRoles.HRManager &&
+                 action == "PolicyPublished")
+
+                ||
+
+                (entityType == "HrPolicyVersion" &&
+                 action == "PolicyVersionOpened" &&
+                 (role == AppRoles.HRManager ||
+                  role == AppRoles.Employee))
+
+                ||
+
+                (entityType == "PolicyAcknowledgement" &&
+                 action == "PolicyAcknowledged" &&
+                 (role == AppRoles.HRManager ||
+                  role == AppRoles.Employee))
+            );
+
         if (!isAllowedEvent &&
             !isWorkEmailEvent &&
             !isAiAnalysisEvent &&
-            !isEmployeeUpdateEvent)
+            !isEmployeeUpdateEvent &&
+            !isPolicyEvent)
         {
             throw new ArgumentException(
                 "Audit event is not approved.");
