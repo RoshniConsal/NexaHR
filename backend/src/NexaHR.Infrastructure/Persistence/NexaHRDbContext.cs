@@ -1,4 +1,5 @@
 using NexaHR.Infrastructure.Persistence.Configurations.CvReviews;
+using NexaHR.Infrastructure.Persistence.Configurations.CvMatching;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,41 @@ public class NexaHRDbContext
 
     public DbSet<VacancyDecision> VacancyDecisions =>
         Set<VacancyDecision>();
+
+    public DbSet<CvMatchRun> CvMatchRuns =>
+        Set<CvMatchRun>();
+
+    public DbSet<SkillCatalogueVersion> SkillCatalogueVersions =>
+        Set<SkillCatalogueVersion>();
+
+    private void EnsureMatchingHistoryImmutable()
+    {
+        ChangeTracker.DetectChanges();
+
+        var invalidMatchChanges = ChangeTracker
+            .Entries<CvMatchRun>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidMatchChanges)
+        {
+            throw new InvalidOperationException(
+                "Existing CV matching runs cannot be modified or deleted.");
+        }
+
+        var invalidCatalogueChanges = ChangeTracker
+            .Entries<SkillCatalogueVersion>()
+            .Any(entry =>
+                entry.State == EntityState.Modified ||
+                entry.State == EntityState.Deleted);
+
+        if (invalidCatalogueChanges)
+        {
+            throw new InvalidOperationException(
+                "Published skill catalogue versions cannot be modified or deleted.");
+        }
+    }
 
     private void EnsureAuditAppendOnly()
     {
@@ -350,6 +386,7 @@ public class NexaHRDbContext
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
+        EnsureMatchingHistoryImmutable();
 
         return base.SaveChanges(
             acceptAllChangesOnSuccess);
@@ -363,6 +400,7 @@ public class NexaHRDbContext
         EnsureVacancyHistoryImmutable();
         EnsureApplicationHistoryImmutable();
         EnsureCvHistoryImmutable();
+        EnsureMatchingHistoryImmutable();
 
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
@@ -378,6 +416,8 @@ public class NexaHRDbContext
         builder.ApplyConfiguration(new CandidateApplicationConfiguration());
         builder.ApplyConfiguration(new CvExtractionRunConfiguration());
         builder.ApplyConfiguration(new CvReviewVersionConfiguration());
+        builder.ApplyConfiguration(new CvMatchRunConfiguration());
+        builder.ApplyConfiguration(new SkillCatalogueVersionConfiguration());
         builder.ApplyConfiguration(new ApplicationStageEventConfiguration());
         builder.ApplyConfiguration(new ApplicationConsentConfiguration());
         builder.ApplyConfiguration(new VacancyConfiguration());

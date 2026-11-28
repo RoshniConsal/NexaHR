@@ -827,6 +827,122 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvMatchRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CriteriaSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CvReviewVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EvidenceJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExperienceAssessmentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InputSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<decimal>("MatchedWeight")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("RuleVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("Score")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("SkillCatalogueVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<decimal>("TotalWeight")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CvReviewVersionId");
+
+                    b.HasIndex("SkillCatalogueVersionId");
+
+                    b.HasIndex("VacancyRevisionId");
+
+                    b.HasIndex("ApplicationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentId", "SourceSha256Hash");
+
+                    b.HasIndex("ApplicationId", "DocumentId", "CvReviewVersionId", "VacancyRevisionId");
+
+                    b.ToTable("CvMatchRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CvMatchRun_CriteriaJson", "ISJSON([CriteriaSnapshotJson], ARRAY) = 1");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_EvidenceJson", "ISJSON([EvidenceJson], ARRAY) = 1");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_ExperienceJson", "ISJSON([ExperienceAssessmentJson], OBJECT) = 1");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_InputHash", "LEN([InputSha256Hash]) = 64");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_RuleVersion", "LEN(LTRIM(RTRIM([RuleVersion]))) > 0");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_Score", "([TotalWeight] = 0 AND [Score] IS NULL) OR ([TotalWeight] > 0 AND [Score] IS NOT NULL AND [Score] >= 0 AND [Score] <= 100)");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_SourceHash", "LEN([SourceSha256Hash]) = 64");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_Version", "[Version] > 0");
+
+                            t.HasCheckConstraint("CK_CvMatchRun_Weights", "[MatchedWeight] >= 0 AND [TotalWeight] >= 0 AND [MatchedWeight] <= [TotalWeight]");
+                        });
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.CvReviewVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1331,6 +1447,69 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_RetentionRun_MaxRecords", "[MaxRecords] > 0 AND [MaxRecords] <= 1000");
 
                             t.HasCheckConstraint("CK_RetentionRun_Status", "[Status] IN ('Pending','Running','Completed','Failed','Blocked')");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.SkillCatalogueVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CatalogueJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("PreviousVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PublishedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReviewReason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousVersionId")
+                        .IsUnique()
+                        .HasFilter("[PreviousVersionId] IS NOT NULL");
+
+                    b.HasIndex("PublishedByUserId");
+
+                    b.HasIndex("Version")
+                        .IsUnique();
+
+                    b.ToTable("SkillCatalogueVersions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SkillCatalogueVersion_Hash", "LEN([ContentSha256Hash]) = 64");
+
+                            t.HasCheckConstraint("CK_SkillCatalogueVersion_Json", "ISJSON([CatalogueJson], ARRAY) = 1");
+
+                            t.HasCheckConstraint("CK_SkillCatalogueVersion_Parent", "([Version] = 1 AND [PreviousVersionId] IS NULL) OR ([Version] > 1 AND [PreviousVersionId] IS NOT NULL AND [PreviousVersionId] <> [Id])");
+
+                            t.HasCheckConstraint("CK_SkillCatalogueVersion_ReviewReason", "LEN(LTRIM(RTRIM([ReviewReason]))) > 0");
+
+                            t.HasCheckConstraint("CK_SkillCatalogueVersion_Version", "[Version] > 0");
                         });
                 });
 
@@ -1880,6 +2059,48 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvMatchRun", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.SkillCatalogueVersion", null)
+                        .WithMany()
+                        .HasForeignKey("SkillCatalogueVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId")
+                        .HasPrincipalKey("Id", "DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId", "SourceSha256Hash")
+                        .HasPrincipalKey("Id", "Sha256Hash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvReviewVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId", "CvReviewVersionId", "VacancyRevisionId")
+                        .HasPrincipalKey("ApplicationId", "DocumentId", "Id", "VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.CvReviewVersion", b =>
                 {
                     b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
@@ -2008,6 +2229,20 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.HasOne("NexaHR.Domain.Entities.ProcessingPolicy", null)
                         .WithMany()
                         .HasForeignKey("ProcessingPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.SkillCatalogueVersion", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.SkillCatalogueVersion", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

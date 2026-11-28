@@ -193,6 +193,22 @@ public sealed class AuditWriter : IAuditWriter
                  reasonCode is null)
 
                 ||
+            (module == "Recruitment" &&
+                 entityType == "CvMatchRun" &&
+                 action == "CvMatchCreated" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+                (module == "Recruitment" &&
+                 entityType == "SkillCatalogueVersion" &&
+                 action == "SkillCataloguePublished" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
 
                 (module == "Recruitment" &&
                  entityType == "CvDocument" &&
