@@ -1,3 +1,7 @@
+using NexaHR.Application.Interfaces.Applications;
+using NexaHR.Application.Interfaces.CvReviews;
+using NexaHR.Infrastructure.Services.CvReviews;
+using NexaHR.Infrastructure.Services.Applications;
 using NexaHR.Application.Interfaces.CvDocuments;
 using NexaHR.Infrastructure.Services.CvDocuments;
 using NexaHR.Application.Interfaces.Audit;
@@ -96,6 +100,8 @@ builder.Services.AddScoped<IPrivacyService, PrivacyService>();
 
 // Register private CV document services
 builder.Services.AddScoped<ICvDocumentService, CvDocumentService>();
+builder.Services.AddScoped<IApplicationService, ApplicationService>();
+builder.Services.AddScoped<ICvReviewService, CvReviewService>();
 builder.Services.AddScoped<ICvFileStorage, CvFileStorage>();
 builder.Services.AddScoped<ICvFileValidator, CvFileValidator>();
 builder.Services.AddScoped<ICvMalwareScanner, ClamAvMalwareScanner>();

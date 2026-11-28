@@ -150,6 +150,42 @@ public sealed class AuditWriter : IAuditWriter
                 ||
 
                 (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
+                 action == "ApplicationSubmitted" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "ApplicationConsent" &&
+                 action == "ApplicationAiConsentChanged" &&
+                 role == AppRoles.Candidate &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CandidateApplication" &&
+                 action == "ApplicationStageChanged" &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
+                 entityType == "CvReviewVersion" &&
+                 action is ("CvReviewDraftSaved" or "CvReviewConfirmed" or "CvReviewRevalidated") &&
+                 role == AppRoles.HRManager &&
+                 hasEntityId &&
+                 reasonCode is null)
+
+                ||
+
+                (module == "Recruitment" &&
                  entityType == "CvDocument" &&
                  role == AppRoles.Candidate &&
                  hasEntityId &&

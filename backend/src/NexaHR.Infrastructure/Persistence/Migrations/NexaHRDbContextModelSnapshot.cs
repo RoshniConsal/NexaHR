@@ -225,6 +225,127 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.ToTable("AccountInvitations", (string)null);
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.ApplicationConsent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ConsentText")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Granted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ProcessingPolicyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TextVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("ApplicationId")
+                        .IsUnique()
+                        .HasFilter("[Purpose] = 'Submission'");
+
+                    b.HasIndex("ProcessingPolicyId");
+
+                    b.HasIndex("ApplicationId", "Purpose", "Provider", "AtUtc");
+
+                    b.ToTable("ApplicationConsents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ApplicationConsent_AiProvider", "[Purpose] <> 'AiProcessing' OR ([Provider] IS NOT NULL AND LEN(LTRIM(RTRIM([Provider]))) > 0 AND [ProcessingPolicyId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ApplicationConsent_Purpose", "[Purpose] IN ('Submission','AiProcessing')");
+
+                            t.HasCheckConstraint("CK_ApplicationConsent_Submission", "[Purpose] <> 'Submission' OR ([Granted] = 1 AND [Provider] IS NULL)");
+
+                            t.HasCheckConstraint("CK_ApplicationConsent_Text", "LEN(LTRIM(RTRIM([TextVersion]))) > 0 AND LEN(LTRIM(RTRIM([ConsentText]))) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.ApplicationStageEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FromStage")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ToStage")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("ApplicationId")
+                        .IsUnique()
+                        .HasFilter("[FromStage] IS NULL");
+
+                    b.HasIndex("ApplicationId", "AtUtc");
+
+                    b.ToTable("ApplicationStageEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ApplicationStageEvent_ChangedStage", "[FromStage] IS NULL OR [FromStage] <> [ToStage]");
+
+                            t.HasCheckConstraint("CK_ApplicationStageEvent_FromStage", "[FromStage] IS NULL OR [FromStage] IN ('Applied','UnderReview','Shortlisted','Interview','OfferSent','OfferAccepted','Hired','Rejected','Withdrawn','OfferDeclined')");
+
+                            t.HasCheckConstraint("CK_ApplicationStageEvent_InitialStage", "[FromStage] IS NOT NULL OR [ToStage] = 'Applied'");
+
+                            t.HasCheckConstraint("CK_ApplicationStageEvent_Reason", "[ToStage] NOT IN ('Rejected','Withdrawn') OR ([Reason] IS NOT NULL AND LEN(LTRIM(RTRIM([Reason]))) > 0)");
+
+                            t.HasCheckConstraint("CK_ApplicationStageEvent_ToStage", "[ToStage] IN ('Applied','UnderReview','Shortlisted','Interview','OfferSent','OfferAccepted','Hired','Rejected','Withdrawn','OfferDeclined')");
+                        });
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.AuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -374,6 +495,96 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("AuthSessions", (string)null);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CandidateApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AppliedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CandidateUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("DuplicateEmailFlag")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("DuplicatePhoneFlag")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("VacancyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateUserId", "AppliedAtUtc");
+
+                    b.HasIndex("CandidateUserId", "DocumentId");
+
+                    b.HasIndex("CandidateUserId", "VacancyId")
+                        .IsUnique();
+
+                    b.HasIndex("VacancyId", "Stage");
+
+                    b.HasIndex("VacancyId", "VacancyRevisionId");
+
+                    b.ToTable("CandidateApplications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CandidateApplication_Stage", "[Stage] IN ('Applied','UnderReview','Shortlisted','Interview','OfferSent','OfferAccepted','Hired','Rejected','Withdrawn','OfferDeclined')");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CandidateProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Education")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Skills")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("CandidateProfiles", (string)null);
                 });
 
             modelBuilder.Entity("NexaHR.Domain.Entities.CompanySettings", b =>
@@ -529,6 +740,183 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_CvDocument_SizeBytes", "[SizeBytes] > 0 AND [SizeBytes] <= 5242880");
 
                             t.HasCheckConstraint("CK_CvDocument_Version", "[Version] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvExtractionRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EvidenceJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ParserVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceSha256Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentId", "SourceSha256Hash");
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.ToTable("CvExtractionRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CvExtractionRun_EvidenceJson", "[EvidenceJson] IS NULL OR ISJSON([EvidenceJson]) = 1");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_Lifecycle", "(([Status] = 'Queued' AND [StartedAtUtc] IS NULL AND [CompletedAtUtc] IS NULL AND [ResultJson] IS NULL AND [EvidenceJson] IS NULL AND [FailureCode] IS NULL) OR ([Status] = 'Processing' AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NULL AND [ResultJson] IS NULL AND [EvidenceJson] IS NULL AND [FailureCode] IS NULL) OR ([Status] = 'ReadyForReview' AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NOT NULL AND [ResultJson] IS NOT NULL AND [FailureCode] IS NULL) OR ([Status] = 'Failed' AND [StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] IS NOT NULL AND [ResultJson] IS NULL AND [EvidenceJson] IS NULL AND [FailureCode] IS NOT NULL AND LEN(LTRIM(RTRIM([FailureCode]))) > 0))");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_ParserVersion", "LEN(LTRIM(RTRIM([ParserVersion]))) > 0");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_ResultJson", "[ResultJson] IS NULL OR ISJSON([ResultJson]) = 1");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_SourceHash", "LEN([SourceSha256Hash]) = 64");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_Status", "[Status] IN ('Queued','Processing','ReadyForReview','Failed')");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_TimestampOrder", "([StartedAtUtc] IS NULL OR [StartedAtUtc] >= [CreatedAtUtc]) AND ([CompletedAtUtc] IS NULL OR ([StartedAtUtc] IS NOT NULL AND [CompletedAtUtc] >= [StartedAtUtc]))");
+
+                            t.HasCheckConstraint("CK_CvExtractionRun_Version", "[Version] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvReviewVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ConfirmedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DuplicateResolutionJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ExtractionRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PreviousReviewVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReviewerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("VacancyRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ValuesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousReviewVersionId")
+                        .IsUnique()
+                        .HasFilter("[PreviousReviewVersionId] IS NOT NULL");
+
+                    b.HasIndex("ReviewerUserId");
+
+                    b.HasIndex("VacancyRevisionId");
+
+                    b.HasIndex("ApplicationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("ApplicationId", "DocumentId", "ExtractionRunId");
+
+                    b.HasIndex("ApplicationId", "DocumentId", "PreviousReviewVersionId");
+
+                    b.HasIndex("ApplicationId", "Status", "Version");
+
+                    b.ToTable("CvReviewVersions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CvReviewVersion_ChangedFieldsJson", "ISJSON([ChangedFieldsJson]) = 1");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_Confirmation", "([Status] = 'Draft' AND [ConfirmedAtUtc] IS NULL) OR ([Status] = 'Confirmed' AND [ConfirmedAtUtc] IS NOT NULL AND [ConfirmedAtUtc] >= [CreatedAtUtc])");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_DuplicateResolutionJson", "ISJSON([DuplicateResolutionJson]) = 1");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_History", "([Version] = 1 AND [PreviousReviewVersionId] IS NULL) OR ([Version] > 1 AND [PreviousReviewVersionId] IS NOT NULL AND [PreviousReviewVersionId] <> [Id])");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_Status", "[Status] IN ('Draft','Confirmed')");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_ValuesJson", "ISJSON([ValuesJson]) = 1");
+
+                            t.HasCheckConstraint("CK_CvReviewVersion_Version", "[Version] > 0");
                         });
                 });
 
@@ -1367,11 +1755,84 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("NexaHR.Domain.Entities.ApplicationConsent", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.ProcessingPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.ApplicationStageEvent", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("NexaHR.Domain.Entities.AuthSession", b =>
                 {
                     b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CandidateApplication", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.CandidateProfile", null)
+                        .WithMany()
+                        .HasForeignKey("CandidateUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.Vacancy", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvDocument", null)
+                        .WithMany()
+                        .HasForeignKey("CandidateUserId", "DocumentId")
+                        .HasPrincipalKey("OwnerUserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyId", "VacancyRevisionId")
+                        .HasPrincipalKey("VacancyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CandidateProfile", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("NexaHR.Domain.Entities.CandidateProfile", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -1400,6 +1861,57 @@ namespace NexaHR.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvExtractionRun", b =>
+                {
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId")
+                        .HasPrincipalKey("Id", "DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId", "SourceSha256Hash")
+                        .HasPrincipalKey("Id", "Sha256Hash")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NexaHR.Domain.Entities.CvReviewVersion", b =>
+                {
+                    b.HasOne("NexaHR.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.VacancyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("VacancyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CandidateApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId")
+                        .HasPrincipalKey("Id", "DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NexaHR.Domain.Entities.CvExtractionRun", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId", "ExtractionRunId")
+                        .HasPrincipalKey("ApplicationId", "DocumentId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NexaHR.Domain.Entities.CvReviewVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId", "DocumentId", "PreviousReviewVersionId")
+                        .HasPrincipalKey("ApplicationId", "DocumentId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("NexaHR.Domain.Entities.Department", b =>
